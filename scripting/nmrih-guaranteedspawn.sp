@@ -76,7 +76,7 @@ public void OnPluginStart()
 	GameData gamedata = new GameData("guaranteedspawn.games");
 
 	StartPrepSDKCall(SDKCall_Player);
-	PrepSDKCall_SetFromConf(gamedata, SDKConf_Signature, "CNMRiH_Player::Spawn");
+	PrepSDKCall_SetFromConf(gamedata, SDKConf_Virtual, "CNMRiH_Player::Spawn");
 	sdkSpawnPlayer = EndPrepSDKCall();
 	if (!sdkSpawnPlayer)
 	{
@@ -344,8 +344,8 @@ int GetRespawnTarget(int client)
 void ForceSpawn(int client, float origin[3], float angles[3])
 {
 	spawningPlayer = client;
-	SDKCall(sdkSpawnPlayer, client);
 	SetEntProp(client, Prop_Send, "m_iPlayerState", 0);
+	SDKCall(sdkSpawnPlayer, client);
 	spawningPlayer = -1;	
 
 	TeleportEntity(client, origin, angles, NULL_VECTOR);
@@ -354,16 +354,39 @@ void ForceSpawn(int client, float origin[3], float angles[3])
 void DefaultSpawn(int client)
 {
 	int e = -1;
-	while((e = FindEntityByClassname(e, "info_player_nmrih")) != -1)
-	{
-		if (IsSpawnpointEnabled(e))
-		{
-			float pos[3], ang[3];
-			GetEntityPosition(e, pos);
-			GetEntityRotation(e, ang);
 
-			ForceSpawn(client, pos, ang);
+	float pos[3], ang[3];
+	int closestSpawn = -1;
+	float leastDistance = 999999.9;
+
+	while ((e = FindEntityByClassname(e, "info_player_nmrih")) != -1)
+	{
+		if (!IsSpawnpointEnabled(e)) {
+			continue;
 		}
+		
+		GetEntityPosition(e, pos);
+		for (int i = 1; i <= MaxClients; i++)
+		{
+			if (i != client && IsClientInGame(i) && NMRiH_IsPlayerAlive(i))
+			{
+				float teammatePos[3];
+				GetClientAbsOrigin(i, teammatePos);
+
+				float dist = GetVectorDistance(teammatePos, pos);
+				if (dist < leastDistance)
+				{
+					closestSpawn = e;
+					leastDistance = dist;
+					GetEntityRotation(e, ang);
+				}
+			}
+		}
+	}
+
+	if (closestSpawn != -1)
+	{
+		ForceSpawn(client, pos, ang);
 	}
 }
 
