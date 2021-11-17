@@ -19,11 +19,11 @@ Players are tracked internally so you cannot exploit the feature by reconnecting
 
 CVars are saved to `cfg/sourcemod/plugin.guaranteedspawn.txt`
 
-- `sm_gspawn_allow_nearby` [1/0]
+- `sm_gspawn_allow_nearby` [1/0] (Default: 1)
   - Toggles spawning next to a teammate by pressing E on them while spectating
 
-- `sm_gspawn_allow_checkpoint` [1/0]
-  - Toggles spawning at checkpoints by pressing E while on freecam (or when `sm_gspawn_allow_checkpoint` is disabled)
+- `sm_gspawn_allow_checkpoint` [1/0] (Default: 1)
+  - Toggles spawning at checkpoints by pressing E while on freecam (or when `sm_gspawn_allow_checkpoint` is unavailable)
 
 ## Translations
 
