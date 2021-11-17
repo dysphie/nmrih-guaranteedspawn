@@ -1,0 +1,13 @@
+"Phrases"
+{
+	"Respawn At Checkpoint"
+	{
+		"en" "Pending spawn\nPress E to spawn at a checkpoint"
+	}
+
+	"Respawn At Teammate"
+	{
+		"#format" "{1:N}"
+		"en" "Pending spawn\nPress E to spawn near {1}"
+	}
+}

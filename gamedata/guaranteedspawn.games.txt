@@ -1,0 +1,26 @@
+"Games"
+{
+	"nmrih"
+	{
+		"Offsets"
+		{
+			"CNMRiH_PlayerSpawn::m_bEnabled"
+			{
+				"windows"	"889"
+				"linux"		"913"
+			}
+
+			"CNMRiH_Player::Spawn"
+			{
+				"windows"	"24"
+				"linux"		"25"
+			}
+
+			"CGameRules::GetPlayerSpawnSpot"
+			{
+				"windows"	"76"
+				"linux"		"77"
+			}
+		}
+	}
+}
