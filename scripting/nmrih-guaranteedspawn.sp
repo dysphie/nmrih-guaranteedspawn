@@ -13,9 +13,9 @@
 public Plugin myinfo = {
     name        = "[NMRiH] Guaranteed Spawn",
     author      = "Dysphie",
-    description = "Grants a spawn to people who've never spawned",
+    description = "Grants a spawn to players who've never spawned in the active round",
     version     = "1.0.0",
-    url         = ""
+    url         = "https://github.com/dysphie/nmrih-guaranteedspawn"
 };
 
 
