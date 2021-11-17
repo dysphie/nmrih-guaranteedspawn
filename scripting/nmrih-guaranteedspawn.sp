@@ -102,6 +102,8 @@ public void OnPluginStart()
 
 	steamSpawnedThisRound = new ArrayList(ByteCountToCells(STEAMID_LEN));
 
+	AutoExecConfig(true, "plugin.guaranteedspawn");
+
 	hudSync = CreateHudSynchronizer();
 	
 	HookEvent("player_spawn", Event_PlayerSpawn);
@@ -133,6 +135,7 @@ public void OnPluginStart()
 	}
 
 	CreateTimer(0.2, NotifyDead, _, TIMER_REPEAT);
+
 }
 
 public void OnMapStart()
@@ -263,7 +266,7 @@ Action NotifyDead(Handle timer)
 			int target = GetRespawnTarget(i);
 			if (target != -1)
 			{
-				ShowRespawnText(i, "%T", "Respawn At Teammate", target, i);
+				ShowRespawnText(i, "%T", "Respawn At Teammate", i, target);
 				continue;
 			}
 		}
