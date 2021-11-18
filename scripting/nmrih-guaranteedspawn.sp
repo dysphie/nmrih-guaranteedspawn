@@ -14,7 +14,7 @@ public Plugin myinfo = {
     name        = "[NMRiH] Guaranteed Spawn",
     author      = "Dysphie",
     description = "Grants a spawn to players who've never spawned in the active round",
-    version     = "1.0.0",
+    version     = "1.0.1",
     url         = "https://github.com/dysphie/nmrih-guaranteedspawn"
 };
 
@@ -35,7 +35,6 @@ enum {
 Handle sdkSpawnPlayer;
 
 float nextHintTime[MAXPLAYERS_NMRIH+1] = {-1.0, ...};
-float spawnShieldTime[MAXPLAYERS_NMRIH+1] = {-1.0, ...};
 
 // Tracks entity indexes spawned this round
 bool spawnedThisRound[MAXPLAYERS_NMRIH+1] = { false, ...}; 
@@ -218,6 +217,10 @@ public void OnEntityCreated(int entity, const char[] classname)
 
 public void OnEntityDestroyed(int entity)
 {
+	if (!IsValidEntity(entity)) {
+		return;
+	}
+
 	char classname[32];
 	GetEntityClassname(entity, classname, sizeof(classname));
 
