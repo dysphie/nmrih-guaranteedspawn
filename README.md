@@ -1,6 +1,5 @@
 # [NMRiH] Guaranteed Spawn
 Grants a spawn to late-joined players who have never spawned in the current round.
-This plugin expects player collisions to be off.
 
 ## Usage:
 - Press use (E) while spectating a teammate to spawn next to them. 
