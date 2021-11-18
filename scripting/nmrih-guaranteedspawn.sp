@@ -1,6 +1,7 @@
 #include <sdktools>
 #include <sdkhooks>
 #include <dhooks>
+#include <guaranteedspawn>
 
 #define MAXPLAYERS_NMRIH 9
 
@@ -11,13 +12,12 @@
 #define PLAYER_STATE_ACTIVE 0
 
 public Plugin myinfo = {
-    name        = "[NMRiH] Guaranteed Spawn",
-    author      = "Dysphie",
-    description = "Grants a spawn to players who've never spawned in the active round",
-    version     = "1.0.1",
-    url         = "https://github.com/dysphie/nmrih-guaranteedspawn"
+	name        = "[NMRiH] Guaranteed Spawn",
+	author      = "Dysphie",
+	description = "Grants a spawn to players who've never spawned in the active round",
+	version     = "1.0.2",
+	url         = "https://github.com/dysphie/nmrih-guaranteedspawn"
 };
-
 
 enum {
 	OBS_MODE_NONE = 0,	// not in spectator mode
@@ -39,6 +39,8 @@ float nextHintTime[MAXPLAYERS_NMRIH+1] = {-1.0, ...};
 // Tracks entity indexes spawned this round
 bool spawnedThisRound[MAXPLAYERS_NMRIH+1] = { false, ...}; 
 
+bool isAlive[MAXPLAYERS_NMRIH+1] = { false, ... };
+
  // Tracks steam IDs spawned this round
 ArrayList steamSpawnedThisRound;
 
@@ -49,6 +51,8 @@ int gameType;
 int gameState;
 
 Handle hudSync;
+
+GlobalForward spawnFwd;
 
 int numSpawnpoints = 0;
 
@@ -105,7 +109,6 @@ public void OnPluginStart()
 
 	hudSync = CreateHudSynchronizer();
 	
-	HookEvent("player_spawn", Event_PlayerSpawn);
 	HookEvent("nmrih_reset_map", OnMapReset, EventHookMode_PostNoCopy);
 	HookEvent("state_change", OnStateChange);
 
@@ -113,7 +116,7 @@ public void OnPluginStart()
 	HookEntityOutput("info_player_nmrih", "OnDisable", OnSpawnpointDisabled);
 
 	if (lateloaded)
-	{	
+	{
 		int e = -1;
 		while ((e = FindEntityByClassname(e, "info_player_nmrih")) != -1)
 		{
@@ -122,9 +125,9 @@ public void OnPluginStart()
 
 		for (int i = 1; i <= MaxClients; i++)
 		{
-			if (IsClientInGame(i) && IsPlayerAlive(i))
+			if (IsClientInGame(i))
 			{
-				OnPlayerSpawned(i);
+				OnClientPutInServer(i);
 			}
 		}
 
@@ -133,13 +136,20 @@ public void OnPluginStart()
 		gameType = GAME_TYPE_NMO;
 	}
 
+	spawnFwd = new GlobalForward("GS_OnGuaranteedSpawn", ET_Event, Param_Cell, Param_Cell);
+
 	CreateTimer(0.2, NotifyDead, _, TIMER_REPEAT);
 
 }
 
+public void OnClientPutInServer(int client)
+{
+	SDKHook(client, SDKHook_PreThink, OnClientPreThink);
+}
+
 public void OnMapStart()
 {
-    fnGetPlayerSpawnSpot.HookGamerules(Hook_Pre, Detour_GetPlayerSpawnSpot);
+	fnGetPlayerSpawnSpot.HookGamerules(Hook_Pre, Detour_GetPlayerSpawnSpot);
 }
 
 /**
@@ -172,6 +182,18 @@ public void OnClientAuthorized(int client)
 	}
 }
 
+// Because player_spawn cannot be trusted..
+void OnClientPreThink(int client)
+{
+	bool curAlive = NMRiH_IsPlayerAlive(client);
+	if (!isAlive[client] && curAlive) 
+	{
+		OnPlayerBecomeAlive(client);
+	}
+
+	isAlive[client] = curAlive;	
+}
+
 void OnMapReset(Event event, const char[] name, bool silent)
 {
 	steamSpawnedThisRound.Clear();
@@ -187,17 +209,10 @@ void OnStateChange(Event event, const char[] name, bool silent)
 	gameState = event.GetInt("state");
 }
 
-void Event_PlayerSpawn(Event event, const char[] name, bool silent)
-{
-	int client = GetClientOfUserId(event.GetInt("userid"));
-	if (client && NMRiH_IsPlayerAlive(client))
-	{
-		OnPlayerSpawned(client);
-	}
-}
-
-void OnPlayerSpawned(int client)
+void OnPlayerBecomeAlive(int client)
 {	
+	PrintToServer("OnPlayerBecomeAlive(%N)", client);
+
 	spawnedThisRound[client] = true;
 	
 	char steamid[STEAMID_LEN];
@@ -347,14 +362,24 @@ int GetRespawnTarget(int client)
 	return (target != client && 0 < target <= MaxClients) ? target : -1;
 }
 
-void ForceSpawn(int client, float origin[3], float angles[3])
+void ForceSpawn(int client, float origin[3], float angles[3], GSMethod type)
 {
-	spawningPlayer = client;
-	SetEntProp(client, Prop_Send, "m_iPlayerState", 0);
-	SDKCall(sdkSpawnPlayer, client);
-	spawningPlayer = -1;	
+	// Let other plugins know that we are about to force spawn
+	Action result;
+	Call_StartForward(spawnFwd);
+	Call_PushCell(client);
+	Call_PushCell(type);
+	Call_Finish(result);
 
-	TeleportEntity(client, origin, angles, NULL_VECTOR);
+	// If everyone's okay with it, do it
+	if (result == Plugin_Continue)
+	{
+		spawningPlayer = client;
+		SetEntProp(client, Prop_Send, "m_iPlayerState", 0);
+		SDKCall(sdkSpawnPlayer, client);
+		spawningPlayer = -1;
+		TeleportEntity(client, origin, angles, NULL_VECTOR);
+	}
 }
 
 void DefaultSpawn(int client)
@@ -392,7 +417,7 @@ void DefaultSpawn(int client)
 
 	if (closestSpawn != -1)
 	{
-		ForceSpawn(client, pos, ang);
+		ForceSpawn(client, pos, ang, GSMethod_Checkpoint);
 	}
 }
 
@@ -423,5 +448,5 @@ void NearbySpawn(int client, int target)
 	float pos[3], ang[3];
 	GetClientAbsOrigin(target, pos);
 	GetClientAbsAngles(target, ang);
-	ForceSpawn(client, pos, ang);
+	ForceSpawn(client, pos, ang, GSMethod_Nearby);
 }
