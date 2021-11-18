@@ -1,6 +1,8 @@
 # [NMRiH] Guaranteed Spawn
 Grants a spawn to late-joined players who have never spawned in the current round.
 
+[AlliedModders thread](https://forums.alliedmods.net/showthread.php?t=335238)
+
 ## Usage:
 - Press use (E) while spectating a teammate to spawn next to them. 
   - Note: This option expects player collisions to be off `sv_max_separation_force 0`
