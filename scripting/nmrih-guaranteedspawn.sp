@@ -205,8 +205,6 @@ void OnStateChange(Event event, const char[] name, bool silent)
 
 void OnPlayerBecomeAlive(int client)
 {	
-	PrintToServer("OnPlayerBecomeAlive(%N)", client);
-
 	indexSpawnedThisRound[client] = true;
 	char steamid[STEAMID_LEN];
 	if (GetClientAuthId(client, AuthId_SteamID64, steamid, sizeof(steamid)))
