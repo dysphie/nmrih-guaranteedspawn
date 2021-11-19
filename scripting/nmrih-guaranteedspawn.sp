@@ -15,7 +15,7 @@ public Plugin myinfo = {
 	name        = "[NMRiH] Guaranteed Spawn",
 	author      = "Dysphie",
 	description = "Grants a spawn to players who've never spawned in the active round",
-	version     = "1.0.2",
+	version     = "1.0.3",
 	url         = "https://github.com/dysphie/nmrih-guaranteedspawn"
 };
 
@@ -35,13 +35,9 @@ enum {
 Handle sdkSpawnPlayer;
 
 float nextHintTime[MAXPLAYERS_NMRIH+1] = {-1.0, ...};
-
-// Tracks entity indexes spawned this round
-bool spawnedThisRound[MAXPLAYERS_NMRIH+1] = { false, ...}; 
-
+bool indexSpawnedThisRound[MAXPLAYERS_NMRIH+1] = { false, ...}; 
 bool isAlive[MAXPLAYERS_NMRIH+1] = { false, ... };
 
- // Tracks steam IDs spawned this round
 ArrayList steamSpawnedThisRound;
 
 int spawningPlayer = -1;
@@ -137,13 +133,14 @@ public void OnPluginStart()
 	}
 
 	spawnFwd = new GlobalForward("GS_OnGuaranteedSpawn", ET_Event, Param_Cell, Param_Cell);
-
 	CreateTimer(0.2, NotifyDead, _, TIMER_REPEAT);
-
 }
 
 public void OnClientPutInServer(int client)
 {
+	nextHintTime[client] = -1.0;
+	indexSpawnedThisRound[client] = false;
+	isAlive[client] = false;
 	SDKHook(client, SDKHook_PreThink, OnClientPreThink);
 }
 
@@ -169,15 +166,12 @@ MRESReturn Detour_GetPlayerSpawnSpot(DHookReturn ret)
 
 public void OnClientAuthorized(int client)
 {
-	nextHintTime[client] = -1.0;
-	spawnedThisRound[client] = false;
-
 	char steamid[STEAMID_LEN];
 	if (GetClientAuthId(client, AuthId_SteamID64, steamid, sizeof(steamid)))
 	{
 		if (steamSpawnedThisRound.FindString(steamid) != -1)
 		{
-			spawnedThisRound[client] = true;
+			indexSpawnedThisRound[client] = true;
 		}	
 	}
 }
@@ -199,7 +193,7 @@ void OnMapReset(Event event, const char[] name, bool silent)
 	steamSpawnedThisRound.Clear();
 	for (int i = 1; i <= MaxClients; i++) 
 	{
-		spawnedThisRound[i] = false;
+		indexSpawnedThisRound[i] = false;
 	}
 }
 
@@ -213,8 +207,7 @@ void OnPlayerBecomeAlive(int client)
 {	
 	PrintToServer("OnPlayerBecomeAlive(%N)", client);
 
-	spawnedThisRound[client] = true;
-	
+	indexSpawnedThisRound[client] = true;
 	char steamid[STEAMID_LEN];
 	if (GetClientAuthId(client, AuthId_SteamID64, steamid, sizeof(steamid)))
 	{
@@ -324,7 +317,7 @@ public Action OnPlayerRunCmd(int client, int& buttons, int& impulse, float vel[3
 
 bool CouldPlayerSpawn(int client)
 {
-	if (spawnedThisRound[client] || !IsRoundOnGoing())
+	if (indexSpawnedThisRound[client] || !IsRoundOnGoing() || NMRiH_IsPlayerAlive(client))
 	{
 		return false;
 	}
