@@ -196,7 +196,9 @@ Action Cmd_SpawnPoints(int client, int args)
 	for (int i = 0; i < spawnpoints.Length; i++)
 	{
 		int ref = spawnpoints.Get(i);
-		ReplyToCommand(client, "SPAWNPOINT: %d (%d)", ref, EntRefToEntIndex(ref));
+		int index = EntRefToEntIndex(ref);
+		bool enabled = index != -1 && IsSpawnpointEnabled(index);
+		ReplyToCommand(client, "SPAWNPOINT: %d (%d) [Enabled: %d]", ref, index, enabled);
 	}
 	return Plugin_Handled;
 }
