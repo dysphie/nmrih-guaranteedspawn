@@ -6,6 +6,8 @@
 #include <dhooks>
 #include <guaranteedspawn>
 
+#define STATE_ACTIVE 0
+
 #define OBS_MODE_IN_EYE 4
 #define OBS_MODE_CHASE 5
 #define OBS_MODE_POI 6
@@ -15,7 +17,7 @@ public Plugin myinfo =
 	name = "[NMRiH] Guaranteed Spawn",
 	author = "Dysphie",
 	description = "Grants a spawn to players who've never spawned in the active round",
-	version = "1.0.5",
+	version = "1.0.6",
 	url = "https://github.com/dysphie/nmrih-guaranteedspawn"
 };
 
@@ -33,6 +35,7 @@ int numSpawnpoints;
 int spawningPlayer = -1;
 DynamicHook fnGetPlayerSpawnSpot;
 Handle sdkSpawnPlayer;
+Handle sdkStateTrans;
 
 ConVar cvNearby;
 ConVar cvStatic;
@@ -95,6 +98,13 @@ void DoGamedataStuff()
 	{
 		SetFailState("Failed to set up SDKCall for CNMRiH_Player::Spawn");
 	}
+
+	StartPrepSDKCall(SDKCall_Player);
+	PrepSDKCall_SetFromConf(gamedata, SDKConf_Signature, "CSDKPlayer::State_Transition");
+	PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
+	sdkStateTrans = EndPrepSDKCall();
+	if (!sdkStateTrans)
+		SetFailState("Failed to set up SDKCall for CSDKPlayer::State_Transition");
 
 	offs_SpawnEnabled = gamedata.GetOffset("CNMRiH_PlayerSpawn::m_bEnabled");
 	if (offs_SpawnEnabled == -1)
@@ -259,7 +269,7 @@ void OnPlayerSpawned(int client)
 
 bool NMRiH_IsPlayerAlive(int client)
 {
-	return IsPlayerAlive(client) && GetEntProp(client, Prop_Send, "m_iPlayerState") == 0;
+	return IsPlayerAlive(client) && GetEntProp(client, Prop_Send, "m_iPlayerState") == STATE_ACTIVE;
 }
 
 bool IsSpawnpointEnabled(int spawnpoint)
@@ -396,7 +406,7 @@ void ForceSpawn(int client, float origin[3], float angles[3], GSMethod type)
 	if (result == Plugin_Continue)
 	{
 		spawningPlayer = client;
-		SetEntProp(client, Prop_Send, "m_iPlayerState", 0);
+		SDKCall(sdkStateTrans, client, STATE_ACTIVE);
 		SDKCall(sdkSpawnPlayer, client);
 		spawningPlayer = -1;
 		TeleportEntity(client, origin, angles, NULL_VECTOR);
