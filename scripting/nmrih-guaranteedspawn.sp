@@ -66,6 +66,8 @@ public void OnPluginStart()
 	AddCommandListener(OnSpecUpdate, "spec_prev");
 	AddCommandListener(OnSpecUpdate, "spec_mode");
 
+	AutoExecConfig(true, "plugin.guaranteedspawn");
+
 	if (lateloaded)
 	{
 		int e = -1;
