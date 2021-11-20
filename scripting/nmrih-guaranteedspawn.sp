@@ -165,7 +165,6 @@ int CountAvailableSpawnpoints()
 		}
 	}
 
-	PrintToServer("CountAvailableSpawnpoints() -> %d", count);
 	return count;
 }
 
@@ -247,8 +246,6 @@ void OnClientPreThink(int client)
 
 void OnPlayerSpawned(int client)
 {
-	PrintToServer("Player spawned: %N", client);
-	
 	indexSpawned[client] = true;
 
 	char steamID[11];
@@ -326,7 +323,6 @@ void Frame_UpdateHintForClient(int serial)
 int GetObserverTarget(int client)
 {
 	int obsMode = GetEntProp(client, Prop_Send, "m_iObserverMode");
-	PrintToServer("obsMode = %d", obsMode);
 	if (obsMode == OBS_MODE_IN_EYE || obsMode == OBS_MODE_CHASE || obsMode == OBS_MODE_POI) 
 	{
 		int target = GetEntPropEnt(client, Prop_Send, "m_hObserverTarget");
