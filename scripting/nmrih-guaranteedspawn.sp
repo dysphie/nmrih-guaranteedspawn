@@ -15,7 +15,7 @@ public Plugin myinfo =
 	name = "[NMRiH] Guaranteed Spawn",
 	author = "Dysphie",
 	description = "Grants a spawn to players who've never spawned in the active round",
-	version = "1.0.4",
+	version = "1.0.5",
 	url = "https://github.com/dysphie/nmrih-guaranteedspawn"
 };
 
@@ -283,14 +283,16 @@ Action UpdateHints(Handle timer)
 void UpdateHintForPlayer(int client)
 {
 	int target = GetRespawnTarget(client);
-
-	if (target == 0)
+	if (target != -1)
 	{
-		ShowRespawnHint(client, "%t", "Respawn At Checkpoint");
-	}
-	else
-	{
-		ShowRespawnHint(client, "%t", "Respawn At Teammate", target);	
+		if (target == 0)
+		{
+			ShowRespawnHint(client, "%t", "Respawn At Checkpoint");
+		}
+		else
+		{
+			ShowRespawnHint(client, "%t", "Respawn At Teammate", target);	
+		}		
 	}
 }
 
@@ -361,7 +363,6 @@ public Action OnPlayerRunCmd(int client, int& buttons, int& impulse, float vel[3
 
 	return Plugin_Continue;
 }
-
 
 int GetRespawnTarget(int client)
 {
