@@ -242,7 +242,7 @@ void OnClientPreThink(int client)
 	if (spawned && !indexSpawned[client]) 
 	{
 		OnPlayerSpawned(client);
-		indexSpawned[client] = spawned;
+		indexSpawned[client] = true;
 	}
 }
 
