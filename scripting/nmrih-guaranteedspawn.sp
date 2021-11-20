@@ -17,7 +17,7 @@ public Plugin myinfo =
 	name = "[NMRiH] Guaranteed Spawn",
 	author = "Dysphie",
 	description = "Grants a spawn to players who've never spawned in the active round",
-	version = "1.0.6",
+	version = "1.0.7",
 	url = "https://github.com/dysphie/nmrih-guaranteedspawn"
 };
 
@@ -262,7 +262,7 @@ void OnPlayerSpawned(int client)
 {
 	indexSpawned[client] = true;
 
-	char steamID[11];
+	char steamID[21];
 	if (GetClientAuthId(client, AuthId_SteamID64, steamID, sizeof(steamID)))
 	{
 		steamSpawned.SetValue(steamID, true);
