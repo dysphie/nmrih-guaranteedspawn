@@ -17,7 +17,7 @@ public Plugin myinfo =
 	name = "[NMRiH] Guaranteed Spawn",
 	author = "Dysphie",
 	description = "Grants a spawn to players who've never spawned in the active round",
-	version = "1.0.7",
+	version = "1.0.8",
 	url = "https://github.com/dysphie/nmrih-guaranteedspawn"
 };
 
@@ -231,34 +231,23 @@ void ClearSpawnHistory()
 
 public void OnClientPutInServer(int client)
 {
-	indexSpawned[client] = false;
 	SDKHook(client, SDKHook_PreThink, OnClientPreThink);
 }
 
-public void OnClientAuthorized(int client)
+public void OnClientPreThink(int client)
 {
-	char steamID[21];
-	if (GetClientAuthId(client, AuthId_SteamID64, steamID, sizeof(steamID)))
+	if (!indexSpawned[client] && NMRiH_IsPlayerAlive(client))
 	{
-		int val;
-		if (steamSpawned.GetValue(steamID, val) && val)
-		{
-			indexSpawned[client] = true;
-		}
+		OnPlayerFirstSpawn(client);
 	}
 }
 
-void OnClientPreThink(int client)
+public void OnClientDisconnect(int client)
 {
-	bool spawned = NMRiH_IsPlayerAlive(client);
-	if (spawned && !indexSpawned[client]) 
-	{
-		OnPlayerSpawned(client);
-		indexSpawned[client] = true;
-	}
+	indexSpawned[client] = false;
 }
 
-void OnPlayerSpawned(int client)
+void OnPlayerFirstSpawn(int client)
 {
 	indexSpawned[client] = true;
 
@@ -294,7 +283,7 @@ Action UpdateHints(Handle timer)
 
 void UpdateHintForPlayer(int client)
 {
-	int target = GetRespawnTarget(client);
+	int target = GetSpawnTarget(client);
 	if (target != -1)
 	{
 		if (target == 0)
@@ -353,20 +342,18 @@ int GetObserverTarget(int client)
 
 public Action OnPlayerRunCmd(int client, int& buttons, int& impulse, float vel[3], float angles[3], int& weapon, int& subtype, int& cmdnum, int& tickcount, int& seed, int mouse[2])
 {
-	if ((buttons & IN_USE) && !indexSpawned[client])
+	if ((buttons & IN_USE))
 	{
-		int target = GetRespawnTarget(client);
+		int target = GetSpawnTarget(client);
 
 		if (target == -1)
 		{
 			return Plugin_Continue;
 		}
-
 		if (target == 0)
 		{
 			DefaultSpawn(client);
 		}
-
 		else
 		{
 			NearbySpawn(client, target);
@@ -376,8 +363,25 @@ public Action OnPlayerRunCmd(int client, int& buttons, int& impulse, float vel[3
 	return Plugin_Continue;
 }
 
-int GetRespawnTarget(int client)
+int GetSpawnTarget(int client)
 {
+	if (indexSpawned[client])
+	{
+		return -1;
+	}
+	
+	char steamid[21];
+	if (!GetClientAuthId(client, AuthId_SteamID64, steamid, sizeof(steamid)))
+	{
+		return -1;
+	}
+
+	bool val;
+	if (steamSpawned.GetValue(steamid, val) && val) {
+		return -1;
+	}
+
+	
 	if (cvNearby.BoolValue)
 	{
 		int obsTarget = GetObserverTarget(client);
@@ -390,7 +394,7 @@ int GetRespawnTarget(int client)
 	if (numSpawnpoints && cvStatic.BoolValue)
 	{
 		return 0;
-	}	
+	}
 
 	return -1;
 }
