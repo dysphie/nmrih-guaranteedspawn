@@ -13,8 +13,13 @@ Grants a spawn to late-joined players who have never spawned in the current roun
 
 Players are tracked internally so you cannot exploit the feature by reconnecting. 
 
-## Requirements
-- [DHooks2](https://github.com/peace-maker/DHooks2/releases)
+## Installation
+- [Install Sourcemod](https://wiki.alliedmods.net/Installing_sourcemod)
+- Install [DHooks2](https://github.com/peace-maker/DHooks2/releases) if running Sourcemod older than 1.11.6820
+- Grab the latest zip from the [releases](https://github.com/dysphie/nmrih-guaranteedspawn/releases) section.
+- Extract the contents into `addons/sourcemod`
+- Refresh the plugin list (`sm plugins refresh` or `sm plugins load nmrih-guaranteedspawn` in server console)
+
 
 ## CVars
 
