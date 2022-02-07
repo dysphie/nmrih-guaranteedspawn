@@ -1,6 +1,8 @@
 # [NMRiH] Guaranteed Spawn
 Grants a spawn to late-joined players who have never spawned in the current round.
 
+**This does not grant infinite respawns**
+
 [AlliedModders thread](https://forums.alliedmods.net/showthread.php?t=335238)
 
 ## Usage:
