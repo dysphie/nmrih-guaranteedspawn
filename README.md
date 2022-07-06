@@ -1,7 +1,6 @@
 # [NMRiH] Guaranteed Spawn
 Grants a spawn to late-joined players who have never spawned in the current round.
-
-**This does not grant infinite respawns**
+Spawns are remembered so you can't exploit this by reconnecting. 
 
 [AlliedModders thread](https://forums.alliedmods.net/showthread.php?t=335238)
 
@@ -12,8 +11,6 @@ Grants a spawn to late-joined players who have never spawned in the current roun
 
 ![image](https://user-images.githubusercontent.com/11559683/177451357-2ceaaa95-8f88-4aa0-bf02-f8d6cb664f4f.png)
 
-
-Players are tracked internally so you cannot exploit the feature by reconnecting. 
 
 ## Installation
 - [Install Sourcemod](https://wiki.alliedmods.net/Installing_sourcemod)
@@ -32,6 +29,12 @@ CVars are saved to `cfg/sourcemod/plugin.guaranteedspawn.txt`
 
 - `sm_gspawn_allow_checkpoint` [1/0] (Default: 1)
   - Toggles spawning at checkpoints by pressing E while on freecam (or when `sm_gspawn_allow_checkpoint` is unavailable)
+
+- `sm_gspawn_remember_steamid` [1/0] (Default: 1)
+  - Toggles tracking spawned players by SteamID64
+
+- `sm_gspawn_remember_ip` [1/0] (Default: 1)
+  - Toggles tracking spawned players by IP
 
 ## Translations
 
