@@ -13,8 +13,7 @@ Spawns are remembered so you can't exploit this by reconnecting.
 
 
 ## Installation
-- [Install Sourcemod](https://wiki.alliedmods.net/Installing_sourcemod)
-- Install [DHooks2](https://github.com/peace-maker/DHooks2/releases) if running Sourcemod older than 1.11.6820
+- [Install Sourcemod 1.11 or higher](https://wiki.alliedmods.net/Installing_sourcemod)
 - Grab the latest zip from the [releases](https://github.com/dysphie/nmrih-guaranteedspawn/releases) section.
 - Extract the contents into `addons/sourcemod`
 - Refresh the plugin list (`sm plugins refresh` or `sm plugins load nmrih-guaranteedspawn` in server console)
