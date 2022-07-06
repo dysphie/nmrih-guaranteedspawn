@@ -2,11 +2,11 @@
 {
 	"Respawn At Checkpoint"
 	{
-		"ru" "Возродиться на контрольной точке"
+		"es" "Aparecer en un spawn"
 	}
 
 	"Respawn At Teammate"
 	{
-		"ru" "Возродиться рядом с {1}"
+		"es" "Aparecer junto a {1}"
 	}
 }
