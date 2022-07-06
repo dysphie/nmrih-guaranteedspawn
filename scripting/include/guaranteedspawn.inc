@@ -1,3 +1,9 @@
+/** Double-include prevention */
+#if defined _guaranteedspawn_included_
+  #endinput
+#endif
+#define _guaranteedspawn_included_
+
 enum GSMethod
 {
 	GSMethod_Checkpoint,

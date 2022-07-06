@@ -1,97 +1,115 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#include <sdkhooks>
-#include <sdktools>
 #include <dhooks>
 #include <guaranteedspawn>
+#include <nmr_instructor>
+#include <sdkhooks>
+#include <sdktools>
+#include <sourcemod>
+
+#define PREFIX "[Guaranteed Spawn] "
+#define PLUGIN_VERSION "1.0.9"
+#define PLUGIN_DESCRIPTION "Grants a spawn to late joiners"
+
+#define INET6_ADDRSTRLEN 46
+#define NMR_MAXPLAYERS   9
 
 #define STATE_ACTIVE 0
 
 #define OBS_MODE_IN_EYE 4
-#define OBS_MODE_CHASE 5
-#define OBS_MODE_POI 6
+#define OBS_MODE_CHASE  5
+#define OBS_MODE_POI    6
 
-public Plugin myinfo = 
+public Plugin myinfo =
 {
-	name = "[NMRiH] Guaranteed Spawn",
-	author = "Dysphie",
-	description = "Grants a spawn to players who've never spawned in the active round",
-	version = "1.0.8",
-	url = "https://github.com/dysphie/nmrih-guaranteedspawn"
+	name        = "[NMRiH] Guaranteed Spawn",
+	author      = "Dysphie",
+	description = PLUGIN_DESCRIPTION,
+	version     = PLUGIN_VERSION,
+	url         = "https://github.com/dysphie/nmrih-guaranteedspawn"
 };
 
-bool lateloaded;
+Handle hintTimer[NMR_MAXPLAYERS + 1];
+
+StringMap ipSpawned;
 StringMap steamSpawned;
-bool indexSpawned[MAXPLAYERS+1] = { false, ... };
-int offs_SpawnEnabled = -1;
+bool      indexSpawned[NMR_MAXPLAYERS + 1];
+bool      joinedGame[NMR_MAXPLAYERS + 1];
+int       offs_SpawnEnabled = -1;
 ArrayList spawnpoints;
-Handle hudSync;
 
 GlobalForward spawnFwd;
 
-int numSpawnpoints;
-
-int spawningPlayer = -1;
+int         spawningPlayer = -1;
 DynamicHook fnGetPlayerSpawnSpot;
-Handle sdkSpawnPlayer;
-Handle sdkStateTrans;
+Handle      sdkSpawnPlayer;
+Handle      sdkStateTrans;
 
 ConVar cvNearby;
 ConVar cvStatic;
-
-public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
-{
-	lateloaded = late;
-	return APLRes_Success;
-}
+ConVar cvCheckSteamID;
+ConVar cvCheckIP;
 
 public void OnPluginStart()
 {
 	LoadTranslations("guaranteedspawn.phrases");
 	DoGamedataStuff();
 
-	hudSync = CreateHudSynchronizer();
+	ipSpawned    = new StringMap();
 	steamSpawned = new StringMap();
-	spawnpoints = new ArrayList();
+	spawnpoints  = new ArrayList();
 
 	cvStatic = CreateConVar("sm_gspawn_allow_checkpoint", "1");
 	cvNearby = CreateConVar("sm_gspawn_allow_nearby", "1");
+	
+	cvCheckSteamID = CreateConVar("sm_gspawn_remember_steamid", "1", "Track players by SteamID64");
+	cvCheckIP = CreateConVar("sm_gspawn_remember_ip", "1", "Track players by IP");
+	
+	CreateConVar("guaranteedspawn_version", PLUGIN_VERSION, PLUGIN_DESCRIPTION,
+    	FCVAR_SPONLY|FCVAR_NOTIFY|FCVAR_DONTRECORD);
 
-	HookEvent("nmrih_reset_map", OnMapReset, EventHookMode_PostNoCopy);
-	RegAdminCmd("debug_spawn_history", Cmd_SpawnHistory, ADMFLAG_ROOT);
-	RegAdminCmd("debug_spawnpoints", Cmd_SpawnPoints, ADMFLAG_ROOT);
+
+	HookEvent("nmrih_reset_map", Event_MapReset, EventHookMode_PostNoCopy);
+	HookEvent("player_spawn", Event_PlayerSpawned);
 
 	AddCommandListener(OnSpecUpdate, "spec_next");
 	AddCommandListener(OnSpecUpdate, "spec_prev");
 	AddCommandListener(OnSpecUpdate, "spec_mode");
+	AddCommandListener(Command_JoinGame, "joingame");
 
 	AutoExecConfig(true, "plugin.guaranteedspawn");
 
-	if (lateloaded)
-	{
-		int e = -1;
-		while ((e = FindEntityByClassname(e, "info_player_nmrih")) != -1)
-		{
-			spawnpoints.Push(EntIndexToEntRef(e));
-		}
+	spawnFwd = new GlobalForward("GS_OnGuaranteedSpawn", ET_Event, Param_Cell, Param_Cell);
+}
 
-		for (int i = 1; i <= MaxClients; i++)
-		{
-			if (IsClientInGame(i)) 
-			{
-				OnClientPutInServer(i);
-			}
-		}
+void Event_PlayerSpawned(Event event, const char[] name, bool dontBroadcast)
+{
+	int client = GetClientOfUserId(event.GetInt("userid"));
+
+	// Ignore false-positives
+	if (!client || !NMRiH_IsPlayerAlive(client))
+	{
+		return;
 	}
 
-	spawnFwd = new GlobalForward("GS_OnGuaranteedSpawn", ET_Event, Param_Cell, Param_Cell);
-	CreateTimer(5.0, UpdateHints, _, TIMER_REPEAT);
+	// This client can't force-spawn anymore for the duration of the round
+	StopWaitingForSpawn(client);
+	RememberSpawned(client);
+}
+
+void StopWaitingForSpawn(int client)
+{
+	delete hintTimer[client];
+	RemoveInstructorHint(client, "guaranteedspawn");
 }
 
 void DoGamedataStuff()
 {
 	GameData gamedata = new GameData("guaranteedspawn.games");
+	if (!gamedata) {
+		SetFailState("Failed to find gamedata/guaranteedspawns.games.txt");
+	}
 
 	StartPrepSDKCall(SDKCall_Player);
 	PrepSDKCall_SetFromConf(gamedata, SDKConf_Virtual, "CNMRiH_Player::Spawn");
@@ -115,13 +133,13 @@ void DoGamedataStuff()
 	}
 
 	int offs_GetPlayerSpawnSpot = gamedata.GetOffset("CGameRules::GetPlayerSpawnSpot");
-	if (offs_GetPlayerSpawnSpot == -1) 
+	if (offs_GetPlayerSpawnSpot == -1)
 	{
 		SetFailState("Failed to get offset to CGameRules::GetPlayerSpawnSpot");
 	}
 
 	fnGetPlayerSpawnSpot = new DynamicHook(offs_GetPlayerSpawnSpot, HookType_GameRules, ReturnType_CBaseEntity, ThisPointer_Ignore);
-	fnGetPlayerSpawnSpot.AddParam(HookParamType_CBaseEntity);   // CBasePlayer *, player
+	fnGetPlayerSpawnSpot.AddParam(HookParamType_CBaseEntity);    // CBasePlayer *, player
 
 	delete gamedata;
 }
@@ -129,6 +147,14 @@ void DoGamedataStuff()
 public void OnMapStart()
 {
 	fnGetPlayerSpawnSpot.HookGamerules(Hook_Pre, Detour_GetPlayerSpawnSpot);
+}
+
+public void OnMapEnd()
+{
+	for (int i = 1; i < sizeof(hintTimer); i++)
+	{
+		delete hintTimer[i];
+	}
 }
 
 /**
@@ -139,7 +165,7 @@ public void OnMapStart()
 MRESReturn Detour_GetPlayerSpawnSpot(DHookReturn ret)
 {
 	if (spawningPlayer != -1)
-	{	
+	{
 		ret.Value = spawningPlayer;
 		return MRES_Supercede;
 	}
@@ -154,68 +180,59 @@ public void OnEntityCreated(int entity, const char[] classname)
 	}
 }
 
-int CountAvailableSpawnpoints()
+int GetAvailableSpawnpoint(int client = -1)
 {
-	int count = 0;
 	int maxSpawnpoints = spawnpoints.Length;
-	int i = 0;
-	while (i < maxSpawnpoints)
+	if (maxSpawnpoints == 0)
 	{
-		int entity = EntRefToEntIndex(spawnpoints.Get(i));
-		if (entity == -1)
+		return -1;
+	}
+
+	float closestDist       = 9999999.0;
+	int   closestSpawnpoint = -1;
+
+	// Iterate backwards
+	for (int i = maxSpawnpoints - 1; i >= 0; i--)
+	{
+		int entref = spawnpoints.Get(i);
+		int ent    = EntRefToEntIndex(entref);
+		if (ent == -1)
 		{
 			spawnpoints.Erase(i);
-			maxSpawnpoints--;
+			continue;
 		}
-		else
+
+		if (!IsSpawnpointEnabled(ent)) {
+			continue;
+		}
+
+		// If no client is specified, we can use any spawnpoint
+		if (client == -1)
 		{
-			if (IsSpawnpointEnabled(entity))
+			return ent;
+		}
+
+		// Else find the spawnpoint closest to a teammate
+		for (int teammate = 1; teammate <= MaxClients; teammate++)
+		{
+			if (teammate == client || !IsClientInGame(teammate) || !NMRiH_IsPlayerAlive(teammate))
 			{
-				count++;
+				continue;
 			}
-			i++;
+
+			float dist = DistanceBetweenEnts(ent, teammate);
+			if (dist < closestDist)
+			{
+				closestDist       = dist;
+				closestSpawnpoint = ent;
+			}
 		}
 	}
 
-	return count;
+	return closestSpawnpoint;
 }
 
-Action Cmd_SpawnHistory(int client, int args)
-{
-	StringMapSnapshot snap = steamSpawned.Snapshot();
-
-	for (int i = 0; i < snap.Length; i++)
-	{
-		char steamID[21];
-		snap.GetKey(i, steamID, sizeof(steamID));
-		ReplyToCommand(client, "STEAM: %s", steamID);
-	}
-
-	delete snap;
-
-	for (int i = 1; i <= MaxClients; i++) 
-	{
-		if (indexSpawned[i] && IsClientInGame(i)) 
-		{
-			ReplyToCommand(client, "INDEX: %d (%N)", i, i);
-		}
-	}
-	return Plugin_Handled;
-}
-
-Action Cmd_SpawnPoints(int client, int args)
-{
-	for (int i = 0; i < spawnpoints.Length; i++)
-	{
-		int ref = spawnpoints.Get(i);
-		int index = EntRefToEntIndex(ref);
-		bool enabled = index != -1 && IsSpawnpointEnabled(index);
-		ReplyToCommand(client, "SPAWNPOINT: %d (%d) [Enabled: %d]", ref, index, enabled);
-	}
-	return Plugin_Handled;
-}
-
-void OnMapReset(Event event, const char[] name, bool silent)
+void Event_MapReset(Event event, const char[] name, bool silent)
 {
 	ClearSpawnHistory();
 }
@@ -223,31 +240,21 @@ void OnMapReset(Event event, const char[] name, bool silent)
 void ClearSpawnHistory()
 {
 	steamSpawned.Clear();
-	for (int i = 1; i <= MaxClients; i++) 
+	ipSpawned.Clear();
+	for (int i = 1; i <= MaxClients; i++)
 	{
 		indexSpawned[i] = false;
-	}	
-}
-
-public void OnClientPutInServer(int client)
-{
-	SDKHook(client, SDKHook_PreThink, OnClientPreThink);
-}
-
-public void OnClientPreThink(int client)
-{
-	if (!indexSpawned[client] && NMRiH_IsPlayerAlive(client))
-	{
-		OnPlayerFirstSpawn(client);
 	}
 }
 
 public void OnClientDisconnect(int client)
 {
 	indexSpawned[client] = false;
+	joinedGame[client]   = false;
+	delete hintTimer[client];
 }
 
-void OnPlayerFirstSpawn(int client)
+void RememberSpawned(int client)
 {
 	indexSpawned[client] = true;
 
@@ -255,6 +262,12 @@ void OnPlayerFirstSpawn(int client)
 	if (GetClientAuthId(client, AuthId_SteamID64, steamID, sizeof(steamID)))
 	{
 		steamSpawned.SetValue(steamID, true);
+	}
+
+	char ip[16];
+	if (GetClientIP(client, ip, sizeof(ip)))
+	{
+		ipSpawned.SetValue(ip, true);
 	}
 }
 
@@ -265,55 +278,72 @@ bool NMRiH_IsPlayerAlive(int client)
 
 bool IsSpawnpointEnabled(int spawnpoint)
 {
-	return view_as<bool>(GetEntData(spawnpoint, offs_SpawnEnabled, 1));
-}
-
-Action UpdateHints(Handle timer)
-{
-	numSpawnpoints = CountAvailableSpawnpoints();
-
-	for (int i = 1; i <= MaxClients; i++)
+	int val = GetEntData(spawnpoint, offs_SpawnEnabled, 1);
+	if (val != 1 && val != 0)
 	{
-		if (!indexSpawned[i] && IsClientInGame(i)) 
-		{
-			UpdateHintForPlayer(i);
-		}
+		LogError(PREFIX... "Bad value for CNMRiH_PlayerSpawn::m_bEnabled. Expected 1 or 0, got %d", val);
 	}
+
+	return val == 1;
 }
 
-void UpdateHintForPlayer(int client)
+void UpdateHint(int client)
 {
-	int target = GetSpawnTarget(client);
+	if (!CouldSpawnThisRound(client))
+	{
+		return;
+	}
+
+	int target = GetBestSpawnTarget(client, false);
 	if (target != -1)
 	{
-		if (target == 0)
+		if (!IsValidClient(target))
 		{
 			ShowRespawnHint(client, "%t", "Respawn At Checkpoint");
 		}
 		else
 		{
-			ShowRespawnHint(client, "%t", "Respawn At Teammate", target);	
-		}		
+			ShowRespawnHint(client, "%t", "Respawn At Teammate", target);
+		}
 	}
 }
 
-void ShowRespawnHint(int client, const char[] format, any ...)
+void ShowRespawnHint(int client, const char[] format, any...)
 {
 	SetGlobalTransTarget(client);
 
 	char buffer[512];
 	VFormat(buffer, sizeof(buffer), format, 3);
 
-	SetHudTextParams(-1.0, 0.01, 5.0, 255, 255, 255, 255, 0, 0.0, 0.0, 0.0);
-	ShowSyncHudText(client, hudSync, buffer);
+	SendInstructorHint(client,
+	                   "guaranteedspawn", "guaranteedspawn", 0, 0, 2,
+	                   ICON_BINDING, ICON_BINDING,
+	                   buffer, buffer, 255, 255, 255,
+	                   0.0, 0.0, 0, "+use", true, false, false, false, "", 255);
+}
+
+Action Command_JoinGame(int client, const char[] command, int argc)
+{
+	// Command listeners can contain unconnected player indexes
+	// It can also fire multiple times, only check once
+	if (!IsValidClient(client) || joinedGame[client] || !CouldSpawnThisRound(client))
+	{
+		return Plugin_Continue;
+	}
+
+	joinedGame[client] = true;
+	BeginWaitingForSpawn(client);
+	return Plugin_Continue;
 }
 
 Action OnSpecUpdate(int client, const char[] command, int argc)
 {
-	if (0 < client <= MaxClients && !indexSpawned[client] && IsClientInGame(client))
+	if (CouldSpawnThisRound(client))
 	{
-		RequestFrame(Frame_UpdateHintForClient, GetClientSerial(client));	
+		RequestFrame(Frame_UpdateHintForClient, GetClientSerial(client));
 	}
+
+	return Plugin_Continue;
 }
 
 void Frame_UpdateHintForClient(int serial)
@@ -321,17 +351,17 @@ void Frame_UpdateHintForClient(int serial)
 	int client = GetClientFromSerial(serial);
 	if (client)
 	{
-		UpdateHintForPlayer(client);
+		UpdateHint(client);
 	}
 }
 
 int GetObserverTarget(int client)
 {
 	int obsMode = GetEntProp(client, Prop_Send, "m_iObserverMode");
-	if (obsMode == OBS_MODE_IN_EYE || obsMode == OBS_MODE_CHASE || obsMode == OBS_MODE_POI) 
+	if (obsMode == OBS_MODE_IN_EYE || obsMode == OBS_MODE_CHASE || obsMode == OBS_MODE_POI)
 	{
 		int target = GetEntPropEnt(client, Prop_Send, "m_hObserverTarget");
-		if (0 < target <= MaxClients)
+		if (target != client && 0 < target <= MaxClients && NMRiH_IsPlayerAlive(target))
 		{
 			return target;
 		}
@@ -339,64 +369,78 @@ int GetObserverTarget(int client)
 	return -1;
 }
 
-
 public Action OnPlayerRunCmd(int client, int& buttons, int& impulse, float vel[3], float angles[3], int& weapon, int& subtype, int& cmdnum, int& tickcount, int& seed, int mouse[2])
 {
-	if ((buttons & IN_USE))
+	if ((buttons & IN_USE) && CouldSpawnThisRound(client))
 	{
-		int target = GetSpawnTarget(client);
-
-		if (target == -1)
-		{
+		int target = GetBestSpawnTarget(client, false);
+		if (target == -1) {
 			return Plugin_Continue;
 		}
-		if (target == 0)
+		
+		if (!IsValidClient(target))
 		{
-			DefaultSpawn(client);
+			SpawnAtCheckpoint(client);
 		}
 		else
 		{
-			NearbySpawn(client, target);
+			SpawnAtPlayer(client, target);
 		}
 	}
 
 	return Plugin_Continue;
 }
 
-int GetSpawnTarget(int client)
+int GetBestSpawnTarget(int client, bool distCheck)
 {
-	if (indexSpawned[client])
+	int obsTarget = GetObserverTarget(client);
+	bool nearbyAllowed = cvNearby.BoolValue;
+
+	// If player is spectating a player, spawn near that player
+	if (obsTarget != -1 && nearbyAllowed)
 	{
-		return -1;
-	}
-	
-	char steamid[21];
-	if (!GetClientAuthId(client, AuthId_SteamID64, steamid, sizeof(steamid)))
-	{
-		return -1;
+		return obsTarget;
 	}
 
-	bool val;
-	if (steamSpawned.GetValue(steamid, val) && val) {
-		return -1;
-	}
-
-	
-	if (cvNearby.BoolValue)
+	// Player is freeroaming or nearby spawning is disabled
+	// If checkpoints are enabled, spawn near the closest checkpoint
+	if (cvStatic.BoolValue)
 	{
-		int obsTarget = GetObserverTarget(client);
-		if (obsTarget != -1)
+		int spawnpoint = GetAvailableSpawnpoint(distCheck ? client : -1);
+		if (spawnpoint != -1)
 		{
-			return obsTarget;
+			return spawnpoint;
 		}
 	}
 
-	if (numSpawnpoints && cvStatic.BoolValue)
+	// No checkpoints are available
+	// If nearby spawning is enabled, pick a random player as target
+	// TODO: Pick the closest?
+	if (nearbyAllowed)
 	{
-		return 0;
+		return GetRandomPlayer(client);
 	}
 
 	return -1;
+}
+
+int GetRandomPlayer(int excludePlayer) 
+{
+    int[] players = new int[MaxClients];
+    int count = 0;
+    for (int i = 1; i <= MaxClients; ++i) 
+	{
+        if (i != excludePlayer && IsClientInGame(i) && NMRiH_IsPlayerAlive(i)) 
+		{
+            players[count] = i;
+            ++count;
+        }
+    }
+    if (count) 
+	{
+        return players[GetRandomInt(0, count - 1)];
+    }
+    return -1;
 }
 
 void ForceSpawn(int client, float origin[3], float angles[3], GSMethod type)
@@ -419,43 +463,125 @@ void ForceSpawn(int client, float origin[3], float angles[3], GSMethod type)
 	}
 }
 
-void DefaultSpawn(int client)
+void SpawnAtCheckpoint(int client)
 {
+	int closestSpawn = GetAvailableSpawnpoint(client);
+	if (closestSpawn == -1)
+	{
+		// We should never get here
+		return;
+	}
+
 	float pos[3], ang[3];
-	int closestSpawn = -1;
-	float leastDistance = 999999.9;
+	GetEntityPosition(closestSpawn, pos);
+	GetEntityRotation(closestSpawn, ang);
+	ForceSpawn(client, pos, ang, GSMethod_Checkpoint);
+}
 
-	int max = spawnpoints.Length;
-	for (int s; s < max; s++)
+void SpawnAtPlayer(int client, int target)
+{
+	// TODO: Currently it just respawns inside the other player
+	float pos[3], ang[3];
+	GetClientAbsOrigin(target, pos);
+	GetClientAbsAngles(target, ang);
+	ForceSpawn(client, pos, ang, GSMethod_Nearby);
+}
+
+bool CouldSpawnThisRound(int client)
+{
+	if (indexSpawned[client])
 	{
-		int e = EntRefToEntIndex(spawnpoints.Get(s));
-		if (e == -1 || !IsSpawnpointEnabled(e)) {
-			continue;
-		}
-		
-		GetEntityPosition(e, pos);
-		for (int i = 1; i <= MaxClients; i++)
+		return false;
+	}
+
+	if (!IsRoundOnGoing())
+	{
+		return false;
+	} 
+	
+	if (NMRiH_IsPlayerAlive(client))
+	{
+		return false;
+	}
+
+	if (cvCheckSteamID.BoolValue)
+	{
+		char steamId[MAX_AUTHID_LENGTH];
+		if (!GetClientAuthId(client, AuthId_SteamID64, steamId, sizeof(steamId)))
 		{
-			if (i != client && IsClientInGame(i) && NMRiH_IsPlayerAlive(i))
-			{
-				float teammatePos[3];
-				GetClientAbsOrigin(i, teammatePos);
+			// Players without a SteamID are considered spawned
+			return false;
+		}
 
-				float dist = GetVectorDistance(teammatePos, pos);
-				if (dist < leastDistance)
-				{
-					closestSpawn = e;
-					leastDistance = dist;
-					GetEntityRotation(e, ang);
-				}
-			}
+		bool didSpawn;
+		if (steamSpawned.GetValue(steamId, didSpawn) && didSpawn)
+		{
+			return false;
 		}
 	}
 
-	if (closestSpawn != -1)
+	if (cvCheckIP.BoolValue)
 	{
-		ForceSpawn(client, pos, ang, GSMethod_Checkpoint);
+		char ip[INET6_ADDRSTRLEN];
+		if (!GetClientIP(client, ip, sizeof(ip)))
+		{
+			// Players without an IP are considered spawned
+			return false;
+		}
+
+		bool didSpawn;
+		if (ipSpawned.GetValue(ip, didSpawn) && didSpawn)
+		{
+			return false;
+		}
 	}
+
+	return true;
+}
+
+bool IsRoundOnGoing()
+{
+	static int STATE_ONGOING = 3;
+	return GameRules_GetProp("_roundState") == STATE_ONGOING;
+}
+
+bool IsValidClient(int client)
+{
+	return 0 < client <= MaxClients && IsClientInGame(client);
+}
+
+void BeginWaitingForSpawn(int client)
+{
+	UpdateHint(client);
+
+	delete hintTimer[client];
+	hintTimer[client] = CreateTimer(1.0, Timer_UpdateHint, GetClientSerial(client), TIMER_REPEAT);
+}
+
+Action Timer_UpdateHint(Handle timer, int clientSerial)
+{
+	int client = GetClientFromSerial(clientSerial);
+	if (!IsValidClient(client))
+	{
+		return Plugin_Stop;
+	}
+
+	if (!CouldSpawnThisRound(client))
+	{
+		return Plugin_Continue;
+	}
+
+	UpdateHint(client);
+	return Plugin_Continue;
+}
+
+float DistanceBetweenEnts(int a, int b)
+{
+	float posA[3], posB[3];
+	GetEntityPosition(a, posA);
+	GetEntityPosition(b, posB);
+
+	return GetVectorDistance(posA, posB);
 }
 
 void GetEntityPosition(int entity, float pos[3])
@@ -466,13 +592,4 @@ void GetEntityPosition(int entity, float pos[3])
 void GetEntityRotation(int entity, float angles[3])
 {
 	GetEntPropVector(entity, Prop_Data, "m_angAbsRotation", angles);
-}
-
-void NearbySpawn(int client, int target)
-{
-	// TODO: Currently it just respawns inside the other player
-	float pos[3], ang[3];
-	GetClientAbsOrigin(target, pos);
-	GetClientAbsAngles(target, ang);
-	ForceSpawn(client, pos, ang, GSMethod_Nearby);
 }
