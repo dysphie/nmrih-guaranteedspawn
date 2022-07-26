@@ -18,3 +18,13 @@ enum GSMethod
  * @return            Plugin_Handled to prevent spawning
  */
 forward Action GS_OnGuaranteedSpawn(int client, GSMethod method);
+
+
+/**
+ * Grants or revokes a client's guaranteed spawn.
+ *
+ * @param client     Player's index
+ * @param canSpawn     Whether the player can spawn
+ * @return         Anything that CloseHandle() returns.
+ */
+native void GS_SetCanSpawn(int client, bool canSpawn);

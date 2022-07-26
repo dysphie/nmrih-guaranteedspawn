@@ -1,19 +1,20 @@
 #pragma semicolon 1
 #pragma newdecls required
 
+#include <sourcemod>
 #include <dhooks>
 #include <guaranteedspawn>
 #include <nmr_instructor>
 #include <sdkhooks>
 #include <sdktools>
-#include <sourcemod>
 
 #define PREFIX "[Guaranteed Spawn] "
-#define PLUGIN_VERSION "1.0.9"
+#define PLUGIN_VERSION "1.0.10"
 #define PLUGIN_DESCRIPTION "Grants a spawn to late joiners"
 
-#define INET6_ADDRSTRLEN 46
-#define NMR_MAXPLAYERS   9
+#define INET_ADDRSTRLEN 16
+#define NMR_MAXPLAYERS 9
+#define DEFAULT_DUCK_VIEW_OFFSET 34.0
 
 #define STATE_ACTIVE 0
 
@@ -51,8 +52,22 @@ ConVar cvStatic;
 ConVar cvCheckSteamID;
 ConVar cvCheckIP;
 
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+	CreateNative("GS_SetCanSpawn", Native_SetCanSpawn);
+	spawnFwd = new GlobalForward("GS_OnGuaranteedSpawn", ET_Event, Param_Cell, Param_Cell);
+	return APLRes_Success;
+}
+
 public void OnPluginStart()
 {
+	if (MaxClients > NMR_MAXPLAYERS)
+	{
+		SetFailState("MaxClients is greater than NMR_MAXPLAYERS (%d > %d), plugin needs to be updated", 
+			MaxClients, NMR_MAXPLAYERS);
+		return;
+	}
+
 	LoadTranslations("guaranteedspawn.phrases");
 	DoGamedataStuff();
 
@@ -79,9 +94,32 @@ public void OnPluginStart()
 	AddCommandListener(Command_JoinGame, "joingame");
 
 	AutoExecConfig(true, "plugin.guaranteedspawn");
-
-	spawnFwd = new GlobalForward("GS_OnGuaranteedSpawn", ET_Event, Param_Cell, Param_Cell);
 }
+
+int Native_SetCanSpawn(Handle plugin, int numParams)
+{
+	int client = GetNativeCell(1);
+	if (client < 1 || client > MaxClients)
+	{
+		return ThrowNativeError(SP_ERROR_NATIVE, "Invalid client index (%d)", client);
+	}
+	if (!IsClientConnected(client))
+	{
+		return ThrowNativeError(SP_ERROR_NATIVE, "Client %d is not connected", client);
+	}
+
+	bool allow = GetNativeCell(2);
+	
+	if (allow) {
+		ForgetSpawned(client);
+	} else {
+		RememberSpawned(client);
+	}
+
+	return 0;
+}
+
+
 
 void Event_PlayerSpawned(Event event, const char[] name, bool dontBroadcast)
 {
@@ -146,6 +184,7 @@ void DoGamedataStuff()
 
 public void OnMapStart()
 {
+	PrecacheSound("silence_loop.wav");
 	fnGetPlayerSpawnSpot.HookGamerules(Hook_Pre, Detour_GetPlayerSpawnSpot);
 }
 
@@ -271,6 +310,23 @@ void RememberSpawned(int client)
 	}
 }
 
+void ForgetSpawned(int client)
+{
+	indexSpawned[client] = false;
+
+	char steamID[21];
+	if (GetClientAuthId(client, AuthId_SteamID64, steamID, sizeof(steamID)))
+	{
+		steamSpawned.Remove(steamID);
+	}
+
+	char ip[16];
+	if (GetClientIP(client, ip, sizeof(ip)))
+	{
+		ipSpawned.Remove(ip);
+	}
+}
+
 bool NMRiH_IsPlayerAlive(int client)
 {
 	return IsPlayerAlive(client) && GetEntProp(client, Prop_Send, "m_iPlayerState") == STATE_ACTIVE;
@@ -281,7 +337,8 @@ bool IsSpawnpointEnabled(int spawnpoint)
 	int val = GetEntData(spawnpoint, offs_SpawnEnabled, 1);
 	if (val != 1 && val != 0)
 	{
-		LogError(PREFIX... "Bad value for CNMRiH_PlayerSpawn::m_bEnabled. Expected 1 or 0, got %d", val);
+		LogError(PREFIX... "Bad boolean value for CNMRiH_PlayerSpawn::m_bEnabled (got %d). Plugin might need an update", val);
+		return false;
 	}
 
 	return val == 1;
@@ -319,7 +376,7 @@ void ShowRespawnHint(int client, const char[] format, any...)
 	                   "guaranteedspawn", "guaranteedspawn", 0, 0, 2,
 	                   ICON_BINDING, ICON_BINDING,
 	                   buffer, buffer, 255, 255, 255,
-	                   0.0, 0.0, 0, "+use", true, false, false, false, "", 255);
+	                   0.0, 0.0, 0, "+use", true, false, false, false, "silence_loop.wav", 255);
 }
 
 Action Command_JoinGame(int client, const char[] command, int argc)
@@ -443,7 +500,7 @@ int GetRandomPlayer(int excludePlayer)
     return -1;
 }
 
-void ForceSpawn(int client, float origin[3], float angles[3], GSMethod type)
+bool ForceSpawn(int client, float origin[3], float angles[3], GSMethod type, bool ducked = false)
 {
 	// Let other plugins know that we are about to force spawn
 	Action result;
@@ -459,8 +516,20 @@ void ForceSpawn(int client, float origin[3], float angles[3], GSMethod type)
 		SDKCall(sdkStateTrans, client, STATE_ACTIVE);
 		SDKCall(sdkSpawnPlayer, client);
 		spawningPlayer = -1;
+
+		if (ducked) 
+		{
+			SetEntityFlags(client, GetEntityFlags(client) | FL_DUCKING);
+			SetEntProp(client, Prop_Send, "m_bDucked", true);
+			SetEntProp(client, Prop_Send, "m_bDucking", true);
+			SetEntPropVector(client, Prop_Data, "m_vecViewOffset", {0.0, 0.0, DEFAULT_DUCK_VIEW_OFFSET});
+		}
+
 		TeleportEntity(client, origin, angles, NULL_VECTOR);
+		return true;
 	}
+
+	return false;
 }
 
 void SpawnAtCheckpoint(int client)
@@ -480,11 +549,12 @@ void SpawnAtCheckpoint(int client)
 
 void SpawnAtPlayer(int client, int target)
 {
-	// TODO: Currently it just respawns inside the other player
 	float pos[3], ang[3];
 	GetClientAbsOrigin(target, pos);
 	GetClientAbsAngles(target, ang);
-	ForceSpawn(client, pos, ang, GSMethod_Nearby);
+
+	bool ducked = GetEntityFlags(target) & FL_DUCKING == FL_DUCKING;
+	ForceSpawn(client, pos, ang, GSMethod_Nearby, ducked);
 }
 
 bool CouldSpawnThisRound(int client)
@@ -522,7 +592,7 @@ bool CouldSpawnThisRound(int client)
 
 	if (cvCheckIP.BoolValue)
 	{
-		char ip[INET6_ADDRSTRLEN];
+		char ip[INET_ADDRSTRLEN];
 		if (!GetClientIP(client, ip, sizeof(ip)))
 		{
 			// Players without an IP are considered spawned
