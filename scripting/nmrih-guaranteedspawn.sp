@@ -9,7 +9,7 @@
 #include <sdktools>
 
 #define PREFIX "[Guaranteed Spawn] "
-#define PLUGIN_VERSION "1.0.10"
+#define PLUGIN_VERSION "1.0.11"
 #define PLUGIN_DESCRIPTION "Grants a spawn to late joiners"
 
 #define INET_ADDRSTRLEN 16
@@ -22,6 +22,9 @@
 #define OBS_MODE_CHASE  5
 #define OBS_MODE_POI    6
 
+#define CVAR_FIRSTPERSON 1
+#define CVAR_THIRDPERSON 2
+
 public Plugin myinfo =
 {
 	name        = "[NMRiH] Guaranteed Spawn",
@@ -32,6 +35,8 @@ public Plugin myinfo =
 };
 
 Handle hintTimer[NMR_MAXPLAYERS + 1];
+
+bool ignoreSpecCmd; 
 
 StringMap ipSpawned;
 StringMap steamSpawned;
@@ -52,8 +57,12 @@ ConVar cvStatic;
 ConVar cvCheckSteamID;
 ConVar cvCheckIP;
 
+ConVar cvFixCam;
+ConVar cvFixCamMode;
+
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
+	RegPluginLibrary("guaranteedspawn");
 	CreateNative("GS_SetCanSpawn", Native_SetCanSpawn);
 	spawnFwd = new GlobalForward("GS_OnGuaranteedSpawn", ET_Event, Param_Cell, Param_Cell);
 	return APLRes_Success;
@@ -75,15 +84,20 @@ public void OnPluginStart()
 	steamSpawned = new StringMap();
 	spawnpoints  = new ArrayList();
 
-	cvStatic = CreateConVar("sm_gspawn_allow_checkpoint", "1");
-	cvNearby = CreateConVar("sm_gspawn_allow_nearby", "1");
+	cvStatic = CreateConVar("sm_gspawn_allow_checkpoint", "1", "Non-zero if players can late-spawn at static spawnpoints");
+	cvNearby = CreateConVar("sm_gspawn_allow_nearby", "1", "Non-zero if players can late-spawn next to a teammate");
+
+	cvFixCam = CreateConVar("sm_gspawn_prefer_spec_teammate", "1",
+		"If nearby spawning is allowed, default to spectating a teammate instead of freecam on join");
 	
-	cvCheckSteamID = CreateConVar("sm_gspawn_remember_steamid", "1", "Track players by SteamID64");
-	cvCheckIP = CreateConVar("sm_gspawn_remember_ip", "1", "Track players by IP");
+	cvFixCamMode = CreateConVar("sm_gspawn_prefer_spec_teammate_mode", "1",
+		"Camera to use if we are making newjoiners spectate a teammate on join. 1 = First person, 2 = Third person");
+	
+	cvCheckSteamID = CreateConVar("sm_gspawn_remember_steamid", "1", "Remember spawned players by SteamID");
+	cvCheckIP = CreateConVar("sm_gspawn_remember_ip", "1", "Remember spawned players by IP");
 	
 	CreateConVar("guaranteedspawn_version", PLUGIN_VERSION, PLUGIN_DESCRIPTION,
     	FCVAR_SPONLY|FCVAR_NOTIFY|FCVAR_DONTRECORD);
-
 
 	HookEvent("nmrih_reset_map", Event_MapReset, EventHookMode_PostNoCopy);
 	HookEvent("player_spawn", Event_PlayerSpawned);
@@ -389,13 +403,15 @@ Action Command_JoinGame(int client, const char[] command, int argc)
 	}
 
 	joinedGame[client] = true;
-	BeginWaitingForSpawn(client);
+
+	// Give the game a chance to spawn us, else enable force-spawn UI
+	RequestFrame(Frame_BeginWaitingForSpawn, GetClientSerial(client));
 	return Plugin_Continue;
 }
 
 Action OnSpecUpdate(int client, const char[] command, int argc)
 {
-	if (CouldSpawnThisRound(client))
+	if (!ignoreSpecCmd && IsValidClient(client) && CouldSpawnThisRound(client))
 	{
 		RequestFrame(Frame_UpdateHintForClient, GetClientSerial(client));
 	}
@@ -472,7 +488,6 @@ int GetBestSpawnTarget(int client, bool distCheck)
 
 	// No checkpoints are available
 	// If nearby spawning is enabled, pick a random player as target
-	// TODO: Pick the closest?
 	if (nearbyAllowed)
 	{
 		return GetRandomPlayer(client);
@@ -620,10 +635,23 @@ bool IsValidClient(int client)
 	return 0 < client <= MaxClients && IsClientInGame(client);
 }
 
+void Frame_BeginWaitingForSpawn(int clientSerial)
+{
+	int client = GetClientFromSerial(clientSerial);
+	if (client && CouldSpawnThisRound(client)) {
+		BeginWaitingForSpawn(client);
+	}
+}
+
 void BeginWaitingForSpawn(int client)
 {
-	UpdateHint(client);
+	// Check if we should snap the client's camera
+	if (cvNearby.BoolValue && cvFixCam.BoolValue)
+	{
+		ForceSpecTeammate(client);
+	}
 
+	UpdateHint(client);
 	delete hintTimer[client];
 	hintTimer[client] = CreateTimer(1.0, Timer_UpdateHint, GetClientSerial(client), TIMER_REPEAT);
 }
@@ -634,11 +662,6 @@ Action Timer_UpdateHint(Handle timer, int clientSerial)
 	if (!IsValidClient(client))
 	{
 		return Plugin_Stop;
-	}
-
-	if (!CouldSpawnThisRound(client))
-	{
-		return Plugin_Continue;
 	}
 
 	UpdateHint(client);
@@ -662,4 +685,19 @@ void GetEntityPosition(int entity, float pos[3])
 void GetEntityRotation(int entity, float angles[3])
 {
 	GetEntPropVector(entity, Prop_Data, "m_angAbsRotation", angles);
+}
+
+void ForceSpecTeammate(int client)
+{
+	int target = GetRandomPlayer(client);
+	if (target == -1) {
+		return;
+	}
+
+	int mode = cvFixCamMode.IntValue == CVAR_FIRSTPERSON ? OBS_MODE_IN_EYE : OBS_MODE_POI;
+
+	ignoreSpecCmd = true;
+	FakeClientCommand(client, "spec_mode %d", mode);
+	FakeClientCommand(client, "spec_player %d", target);
+	ignoreSpecCmd = false;
 }
