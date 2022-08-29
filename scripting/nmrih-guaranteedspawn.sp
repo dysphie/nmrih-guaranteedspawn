@@ -87,10 +87,10 @@ public void OnPluginStart()
 	cvStatic = CreateConVar("sm_gspawn_allow_checkpoint", "1", "Non-zero if players can late-spawn at static spawnpoints");
 	cvNearby = CreateConVar("sm_gspawn_allow_nearby", "1", "Non-zero if players can late-spawn next to a teammate");
 
-	cvFixCam = CreateConVar("sm_gspawn_prefer_spec_teammate", "1",
-		"If nearby spawning is allowed, default to spectating a teammate instead of freecam on join");
+	cvFixCam = CreateConVar("sm_gspawn_spec_target_on_join", "1",
+		"If nearby spawning is allowed, whether to default to spectating a teammate instead of freecam on join");
 	
-	cvFixCamMode = CreateConVar("sm_gspawn_prefer_spec_teammate_mode", "1",
+	cvFixCamMode = CreateConVar("sm_gspawn_spec_target_mode", "2",
 		"Camera to use if we are making newjoiners spectate a teammate on join. 1 = First person, 2 = Third person");
 	
 	cvCheckSteamID = CreateConVar("sm_gspawn_remember_steamid", "1", "Remember spawned players by SteamID");
