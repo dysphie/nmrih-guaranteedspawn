@@ -25,6 +25,5 @@ forward Action GS_OnGuaranteedSpawn(int client, GSMethod method);
  *
  * @param client     Player's index
  * @param canSpawn     Whether the player can spawn
- * @return         Anything that CloseHandle() returns.
  */
 native void GS_SetCanSpawn(int client, bool canSpawn);
