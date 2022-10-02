@@ -103,7 +103,7 @@ public void OnPluginStart()
 	cvCheckSteamID = CreateConVar("sm_gspawn_remember_steamid", "1", "Remember spawned players by SteamID");
 	cvCheckIP = CreateConVar("sm_gspawn_remember_ip", "1", "Remember spawned players by IP");
 	
-	cvHideSpawned = CreateConVar("sm_gspawn_hide_seconds", "2.0", 
+	cvHideSpawned = CreateConVar("sm_gspawn_hide_seconds", "1.2", 
 		"Hide spawned players for this many seconds after spawning. Prevents spooking teammates", 
 		_, true, 0.0, true, 5.0);
 
