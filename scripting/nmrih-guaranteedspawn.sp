@@ -9,7 +9,7 @@
 #include <sdktools>
 
 #define PREFIX "[Guaranteed Spawn] "
-#define PLUGIN_VERSION "1.0.11"
+#define PLUGIN_VERSION "1.0.12"
 #define PLUGIN_DESCRIPTION "Grants a spawn to late joiners"
 
 #define INET_ADDRSTRLEN 16
@@ -25,6 +25,8 @@
 #define CVAR_FIRSTPERSON 1
 #define CVAR_THIRDPERSON 2
 
+#define FL_EDICT_DONTSEND    (1<<4) 
+
 public Plugin myinfo =
 {
 	name        = "[NMRiH] Guaranteed Spawn",
@@ -34,18 +36,21 @@ public Plugin myinfo =
 	url         = "https://github.com/dysphie/nmrih-guaranteedspawn"
 };
 
-Handle hintTimer[NMR_MAXPLAYERS + 1];
 
 bool ignoreSpecCmd; 
 
-StringMap ipSpawned;
-StringMap steamSpawned;
+Handle hintTimer[NMR_MAXPLAYERS + 1];
+float restoreVisTime[NMR_MAXPLAYERS + 1];
 bool      indexSpawned[NMR_MAXPLAYERS + 1];
 bool      joinedGame[NMR_MAXPLAYERS + 1];
+
+StringMap ipSpawned;
+StringMap steamSpawned;
 int       offs_SpawnEnabled = -1;
 ArrayList spawnpoints;
 
 GlobalForward spawnFwd;
+GlobalForward spawnFwdPost;
 
 int         spawningPlayer = -1;
 DynamicHook fnGetPlayerSpawnSpot;
@@ -59,12 +64,14 @@ ConVar cvCheckIP;
 
 ConVar cvFixCam;
 ConVar cvFixCamMode;
+ConVar cvHideSpawned;
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
 	RegPluginLibrary("guaranteedspawn");
 	CreateNative("GS_SetCanSpawn", Native_SetCanSpawn);
-	spawnFwd = new GlobalForward("GS_OnGuaranteedSpawn", ET_Event, Param_Cell, Param_Cell);
+	spawnFwd = new GlobalForward("GS_OnGuaranteedSpawn", ET_Event, Param_Cell, Param_Cell, Param_Cell);
+	spawnFwdPost = new GlobalForward("GS_OnGuaranteedSpawnPost", ET_Event, Param_Cell, Param_Cell, Param_Cell);
 	return APLRes_Success;
 }
 
@@ -84,7 +91,9 @@ public void OnPluginStart()
 	steamSpawned = new StringMap();
 	spawnpoints  = new ArrayList();
 
-	cvStatic = CreateConVar("sm_gspawn_allow_checkpoint", "1", "Non-zero if players can late-spawn at static spawnpoints");
+	cvStatic = CreateConVar("sm_gspawn_allow_checkpoint", "0", 
+		"(Experimental) Non-zero if players can late-spawn at static spawnpoints. Might lead to undersired spawns");
+
 	cvNearby = CreateConVar("sm_gspawn_allow_nearby", "1", "Non-zero if players can late-spawn next to a teammate");
 
 	cvFixCam = CreateConVar("sm_gspawn_spec_target_on_join", "1",
@@ -96,6 +105,10 @@ public void OnPluginStart()
 	cvCheckSteamID = CreateConVar("sm_gspawn_remember_steamid", "1", "Remember spawned players by SteamID");
 	cvCheckIP = CreateConVar("sm_gspawn_remember_ip", "1", "Remember spawned players by IP");
 	
+	cvHideSpawned = CreateConVar("sm_gspawn_hide_seconds", "2.0", 
+		"Hide spawned players for this many seconds after spawning. Prevents spooking teammates", 
+		_, true, 0.0, true, 5.0);
+
 	CreateConVar("guaranteedspawn_version", PLUGIN_VERSION, PLUGIN_DESCRIPTION,
     	FCVAR_SPONLY|FCVAR_NOTIFY|FCVAR_DONTRECORD);
 
@@ -108,6 +121,15 @@ public void OnPluginStart()
 	AddCommandListener(Command_JoinGame, "joingame");
 
 	AutoExecConfig(true, "plugin.guaranteedspawn");
+
+	// If we lateloaded we must assume everyone could have spawned, and deny spawns
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (IsClientInGame(i))
+		{
+			RememberSpawned(i);
+		}
+	}
 }
 
 int Native_SetCanSpawn(Handle plugin, int numParams)
@@ -132,8 +154,6 @@ int Native_SetCanSpawn(Handle plugin, int numParams)
 
 	return 0;
 }
-
-
 
 void Event_PlayerSpawned(Event event, const char[] name, bool dontBroadcast)
 {
@@ -244,7 +264,7 @@ int GetAvailableSpawnpoint(int client = -1)
 	float closestDist       = 9999999.0;
 	int   closestSpawnpoint = -1;
 
-	// Iterate backwards
+	// Iterate backwards so we can do some housekeeping
 	for (int i = maxSpawnpoints - 1; i >= 0; i--)
 	{
 		int entref = spawnpoints.Get(i);
@@ -304,6 +324,7 @@ public void OnClientDisconnect(int client)
 {
 	indexSpawned[client] = false;
 	joinedGame[client]   = false;
+	restoreVisTime[client] = 0.0;
 	delete hintTimer[client];
 }
 
@@ -444,20 +465,12 @@ int GetObserverTarget(int client)
 
 public Action OnPlayerRunCmd(int client, int& buttons, int& impulse, float vel[3], float angles[3], int& weapon, int& subtype, int& cmdnum, int& tickcount, int& seed, int mouse[2])
 {
-	if ((buttons & IN_USE) && CouldSpawnThisRound(client))
+	bool pressedUse = (buttons & IN_USE) && !(GetOldButtons(client) & IN_USE);
+	if (pressedUse & CouldSpawnThisRound(client))
 	{
-		int target = GetBestSpawnTarget(client, false);
-		if (target == -1) {
-			return Plugin_Continue;
-		}
-		
-		if (!IsValidClient(target))
-		{
-			SpawnAtCheckpoint(client);
-		}
-		else
-		{
-			SpawnAtPlayer(client, target);
+		int target = GetBestSpawnTarget(client, true);
+		if (target != -1) {
+			ForceSpawn(client, target);
 		}
 	}
 
@@ -487,12 +500,24 @@ int GetBestSpawnTarget(int client, bool distCheck)
 	}
 
 	// No checkpoints are available
-	// If nearby spawning is enabled, pick a random player as target
+	// If nearby spawning is enabled, just pick the first player we find
 	if (nearbyAllowed)
 	{
-		return GetRandomPlayer(client);
+		return GetFirstAvailablePlayer(client);
 	}
 
+	return -1;
+}
+
+int GetFirstAvailablePlayer(int excludePlayer)
+{
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (i != excludePlayer && IsClientInGame(i) && NMRiH_IsPlayerAlive(i)) 
+		{
+			return i;
+		}
+	}
 	return -1;
 }
 
@@ -515,23 +540,41 @@ int GetRandomPlayer(int excludePlayer)
     return -1;
 }
 
-bool ForceSpawn(int client, float origin[3], float angles[3], GSMethod type, bool ducked = false)
+bool ForceSpawn(int client, int target)
 {
+	bool isTargetPlayer = IsValidClient(target);
+
+	GSMethod method = isTargetPlayer ? GSMethod_Nearby : GSMethod_Checkpoint;
+
 	// Let other plugins know that we are about to force spawn
 	Action result;
 	Call_StartForward(spawnFwd);
 	Call_PushCell(client);
-	Call_PushCell(type);
+	Call_PushCell(method);
+	Call_PushCell(target);
 	Call_Finish(result);
 
-	// If everyone's okay with it, do it
-	if (result == Plugin_Continue)
-	{
-		spawningPlayer = client;
-		SDKCall(sdkStateTrans, client, STATE_ACTIVE);
-		SDKCall(sdkSpawnPlayer, client);
-		spawningPlayer = -1;
+	// Ask plugins listening for our forward if they're ok with this
+	if (result != Plugin_Continue) {
+		return false; // Some plugin rejected our spawn, bail
+	}
+	
+	spawningPlayer = client;
+	SDKCall(sdkStateTrans, client, STATE_ACTIVE);
+	SDKCall(sdkSpawnPlayer, client);
+	spawningPlayer = -1;
 
+	if (isTargetPlayer)
+	{
+		float pos[3], ang[3], vel[3];
+		GetClientAbsOrigin(target, pos);
+		GetClientAbsAngles(target, ang);
+
+		// Inherit velocity too, this stops exploit where players spawn
+		// mid-air and take no fall damage, etc
+		_GetClientAbsVelocity(target, vel);
+
+		bool ducked = GetEntityFlags(target) & FL_DUCKING == FL_DUCKING;
 		if (ducked) 
 		{
 			SetEntityFlags(client, GetEntityFlags(client) | FL_DUCKING);
@@ -540,36 +583,38 @@ bool ForceSpawn(int client, float origin[3], float angles[3], GSMethod type, boo
 			SetEntPropVector(client, Prop_Data, "m_vecViewOffset", {0.0, 0.0, DEFAULT_DUCK_VIEW_OFFSET});
 		}
 
-		TeleportEntity(client, origin, angles, NULL_VECTOR);
-		return true;
+		TeleportEntity(client, pos, ang, vel);
 	}
-
-	return false;
-}
-
-void SpawnAtCheckpoint(int client)
-{
-	int closestSpawn = GetAvailableSpawnpoint(client);
-	if (closestSpawn == -1)
+	else
 	{
-		// We should never get here
-		return;
+		float pos[3], ang[3];
+		GetEntityPosition(target, pos);
+		GetEntityRotation(target, pos);
+		TeleportEntity(client, pos, ang);
+	}
+	
+	Call_StartForward(spawnFwdPost);
+	Call_PushCell(client);
+	Call_PushCell(method);
+	Call_PushCell(target);
+	Call_Finish(result);
+
+	if (cvHideSpawned.FloatValue > 0.0)
+	{
+		restoreVisTime[client] = GetGameTime() + cvHideSpawned.FloatValue;
+		SDKHook(client, SDKHook_SetTransmit, SetTransmit_HideToAll);
 	}
 
-	float pos[3], ang[3];
-	GetEntityPosition(closestSpawn, pos);
-	GetEntityRotation(closestSpawn, ang);
-	ForceSpawn(client, pos, ang, GSMethod_Checkpoint);
+	return true;
 }
 
-void SpawnAtPlayer(int client, int target)
+Action SetTransmit_HideToAll(int entity, int client)
 {
-	float pos[3], ang[3];
-	GetClientAbsOrigin(target, pos);
-	GetClientAbsAngles(target, ang);
+	if (GetGameTime() >= restoreVisTime[entity]) {
+		SDKUnhook(entity, SDKHook_SetTransmit, SetTransmit_HideToAll);
+	}
 
-	bool ducked = GetEntityFlags(target) & FL_DUCKING == FL_DUCKING;
-	ForceSpawn(client, pos, ang, GSMethod_Nearby, ducked);
+	return entity != client ? Plugin_Handled : Plugin_Continue;
 }
 
 bool CouldSpawnThisRound(int client)
@@ -700,4 +745,15 @@ void ForceSpecTeammate(int client)
 	FakeClientCommand(client, "spec_mode %d", mode);
 	FakeClientCommand(client, "spec_player %d", target);
 	ignoreSpecCmd = false;
+}
+
+// Prefixed in case this gets added to SM at some point
+void _GetClientAbsVelocity(int client, float vel[3])
+{
+	GetEntPropVector(client, Prop_Data, "m_vecAbsVelocity", vel);
+}
+
+int GetOldButtons(int client)
+{
+	return GetEntProp(client, Prop_Data, "m_nOldButtons");
 }

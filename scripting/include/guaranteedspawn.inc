@@ -15,10 +15,19 @@ enum GSMethod
  *
  * @param client      Entity index of the spawning client.
  * @param method      Method by which they're spawning
+ * @param target      Entity index of our spawn target
  * @return            Plugin_Handled to prevent spawning
  */
-forward Action GS_OnGuaranteedSpawn(int client, GSMethod method);
+forward Action GS_OnGuaranteedSpawn(int client, GSMethod method, int target);
 
+/**
+ * Called after a client has spawned via their guaranteed spawn
+ *
+ * @param client      Entity index of the spawning client.
+ * @param method      Method by which they're spawning
+ * @param target      Entity index of our spawn target
+ */
+forward void GS_OnGuaranteedSpawnPost(int client, GSMethod method, int target);
 
 /**
  * Grants or revokes a client's guaranteed spawn.
