@@ -26,14 +26,23 @@ CVars are saved to `cfg/sourcemod/plugin.guaranteedspawn.txt`
 - `sm_gspawn_allow_nearby` [1/0] (Default: 1)
   - Toggles spawning next to a teammate by pressing E on them while spectating
 
-- `sm_gspawn_allow_checkpoint` [1/0] (Default: 1)
-  - Toggles spawning at checkpoints by pressing E while on freecam (or when `sm_gspawn_allow_checkpoint` is unavailable)
+- `sm_gspawn_allow_checkpoint` [1/0] (Default: 0)
+  - Toggles spawning at checkpoints by pressing E while on freecam
 
 - `sm_gspawn_remember_steamid` [1/0] (Default: 1)
   - Toggles tracking spawned players by SteamID64
 
 - `sm_gspawn_remember_ip` [1/0] (Default: 1)
   - Toggles tracking spawned players by IP
+
+- `sm_gspawn_spec_target_on_join` [1/0] (Default: 1)
+  - Defaults newjoiners to spectating a teammate upon joining the server, if nearby spawning is enabled.
+
+- `sm_gspawn_spec_target_mode` [1/2] (Default: 2)
+  - Camera to use if we are making newjoiners spectate a teammate on join. 1 = First person, 2 = Third person.
+
+- `sm_gspawn_hide_seconds` [0.0 to 5.0] (Default: 1.2)
+  - Hides spawned players for this many seconds, prevents spooking teammates by spawning right on their face
 
 ## Translations
 
