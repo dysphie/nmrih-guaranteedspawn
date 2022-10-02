@@ -25,8 +25,6 @@
 #define CVAR_FIRSTPERSON 1
 #define CVAR_THIRDPERSON 2
 
-#define FL_EDICT_DONTSEND    (1<<4) 
-
 public Plugin myinfo =
 {
 	name        = "[NMRiH] Guaranteed Spawn",
