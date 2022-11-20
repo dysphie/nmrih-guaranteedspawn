@@ -99,7 +99,7 @@ void DisplayGiveSpawnMenu(int client)
 	menu.SetTitle(buffer);
 	menu.ExitBackButton = true;
 	
-	AddTargetsToMenu(menu, client, true, false); //FIXME
+	AddTargetsToMenu(menu, client, true, false); 
 
 	if (menu.ItemCount <= 0)
 	{
