@@ -46,7 +46,7 @@ CVars are saved to `cfg/sourcemod/plugin.guaranteedspawn.txt`
 
 ## Admin Commands
 
-Commands can also be accessed via the `sm_admin` -> `Player Commands`
+Commands can also be accessed via `sm_admin` -> `Player Commands`
 
 - `sm_givespawn <target>` - Allows the target player(s) to spawn via use (default: E)
 - `sm_removespawn <target>` - Revokes the ability for target player(s) to spawn via use (default: E)
