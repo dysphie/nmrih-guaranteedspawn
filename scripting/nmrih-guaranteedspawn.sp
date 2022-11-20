@@ -9,7 +9,7 @@
 #include <sdktools>
 
 #define PREFIX "[Guaranteed Spawn] "
-#define PLUGIN_VERSION "1.0.12"
+#define PLUGIN_VERSION "1.0.13"
 #define PLUGIN_DESCRIPTION "Grants a spawn to late joiners"
 
 #define INET_ADDRSTRLEN 16
