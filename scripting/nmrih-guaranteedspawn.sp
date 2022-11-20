@@ -7,9 +7,10 @@
 #include <nmr_instructor>
 #include <sdkhooks>
 #include <sdktools>
+#include "nmrih-guaranteedspawn/admin-tools.sp"
 
 #define PREFIX "[Guaranteed Spawn] "
-#define PLUGIN_VERSION "1.0.13"
+#define PLUGIN_VERSION "1.0.14"
 #define PLUGIN_DESCRIPTION "Grants a spawn to late joiners"
 
 #define INET_ADDRSTRLEN 16
@@ -117,6 +118,8 @@ public void OnPluginStart()
 	AddCommandListener(OnSpecUpdate, "spec_prev");
 	AddCommandListener(OnSpecUpdate, "spec_mode");
 	AddCommandListener(Command_JoinGame, "joingame");
+
+	AdminTools_OnPluginStart();
 
 	AutoExecConfig(true, "plugin.guaranteedspawn");
 

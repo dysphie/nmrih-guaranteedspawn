@@ -10,4 +10,31 @@
 		"#format" "{1:N}"
 		"en" "Spawn near {1}"
 	}
+
+	"Give spawn to player"
+	{
+		"en"			"Give spawn to player"
+	}
+	
+	"Remove spawn from player"
+	{
+		"en"			"Remove spawn from player"
+	}	
+	
+	"Gave spawn to target"
+	{
+		"#format"		"{1:t}"
+		"en"			"gave spawn to {1}."
+	}	
+	
+	"Removed spawn from target"
+	{
+		"#format"		"{1:t}"
+		"en"			"removed spawn from {1}."
+	}
+
+	"No targets available"
+	{
+		"en"	"There are no players you can target at this time"
+	}
 }
