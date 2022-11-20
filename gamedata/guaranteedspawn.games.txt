@@ -7,7 +7,7 @@
 			"CSDKPlayer::State_Transition"
 			{
 				"library"	"server"
-				"windows"	"\x55\x8B\xEC\x56\x8B\xF1\x8B\x8E\x20\x13\x00\x00"
+				"windows"	"\x55\x8B\xEC\x56\x8B\xF1\x8B\x8E\x24\x13\x00\x00\x85\xC9\x74\x2A\x8B\x41\x18"
 				"linux"		"@_ZN10CSDKPlayer16State_TransitionE14SDKPlayerState"
 			}
 		}
@@ -15,8 +15,8 @@
 		{
 			"CNMRiH_PlayerSpawn::m_bEnabled"
 			{
-				"windows"	"889"
-				"linux"		"913"
+				"windows"	"893"
+				"linux"		"917"
 			}
 
 			"CNMRiH_Player::Spawn"
