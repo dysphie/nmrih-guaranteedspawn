@@ -10,7 +10,7 @@
 #include "nmrih-guaranteedspawn/admin-tools.sp"
 
 #define PREFIX "[Guaranteed Spawn] "
-#define PLUGIN_VERSION "1.0.14"
+#define PLUGIN_VERSION "1.0.16"
 #define PLUGIN_DESCRIPTION "Grants a spawn to late joiners"
 
 #define INET_ADDRSTRLEN 16
@@ -147,10 +147,14 @@ int Native_SetCanSpawn(Handle plugin, int numParams)
 
 	bool allow = GetNativeCell(2);
 	
-	if (allow) {
+	if (allow) 
+	{
 		ForgetSpawned(client);
-	} else {
+		BeginWaitingForSpawn(client);
+	} else 
+	{
 		RememberSpawned(client);
+		StopWaitingForSpawn(client);
 	}
 
 	return 0;
@@ -494,8 +498,7 @@ int GetBestSpawnTarget(int client, bool distCheck)
 	if (cvStatic.BoolValue)
 	{
 		int spawnpoint = GetAvailableSpawnpoint(distCheck ? client : -1);
-		if (spawnpoint != -1)
-		{
+		if (spawnpoint != -1) {
 			return spawnpoint;
 		}
 	}
@@ -590,7 +593,7 @@ bool ForceSpawn(int client, int target)
 	{
 		float pos[3], ang[3];
 		GetEntityPosition(target, pos);
-		GetEntityRotation(target, pos);
+		GetEntityRotation(target, ang);
 		TeleportEntity(client, pos, ang);
 	}
 	

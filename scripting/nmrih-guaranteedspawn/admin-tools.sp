@@ -250,7 +250,7 @@ Action Command_GiveSpawn(int client, int args)
 			client,
 			target_list,
 			MAXPLAYERS,
-			COMMAND_FILTER_ALIVE,
+			COMMAND_FILTER_DEAD,
 			target_name,
 			sizeof(target_name),
 			tn_is_ml)) <= 0)
@@ -296,7 +296,7 @@ Action Command_RemoveSpawn(int client, int args)
 			client,
 			target_list,
 			MAXPLAYERS,
-			COMMAND_FILTER_ALIVE,
+			COMMAND_FILTER_DEAD,
 			target_name,
 			sizeof(target_name),
 			tn_is_ml)) <= 0)
