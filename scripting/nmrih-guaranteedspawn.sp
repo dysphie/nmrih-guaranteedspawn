@@ -10,7 +10,7 @@
 #include "nmrih-guaranteedspawn/admin-tools.sp"
 
 #define PREFIX "[Guaranteed Spawn] "
-#define PLUGIN_VERSION "1.0.16"
+#define PLUGIN_VERSION "1.0.17"
 #define PLUGIN_DESCRIPTION "Grants a spawn to late joiners"
 
 #define INET_ADDRSTRLEN 16

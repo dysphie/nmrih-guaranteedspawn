@@ -74,7 +74,7 @@ void AdminMenu_RemoveSpawn(TopMenu topmenu,
 	}
 	else if (action == TopMenuAction_SelectOption)
 	{
-		DisplayGiveSpawnMenu(param);
+		DisplayRemoveSpawnMenu(param);
 	}
 }
 
