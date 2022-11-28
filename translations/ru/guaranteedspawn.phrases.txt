@@ -9,4 +9,29 @@
 	{
 		"ru" "Возродиться рядом с {1}"
 	}
+
+	"Give spawn to player"
+	{
+		"ru" "Позволить возрождение на игроке"
+	}
+	
+	"Remove spawn from player"
+	{
+		"ru" "Убрать возрождение на игроке"
+	}	
+	
+	"Gave spawn to target"
+	{
+		"ru" "даёт возрождение на {1}."
+	}	
+	
+	"Removed spawn from target"
+	{
+		"ru" "убирает возрождение на {1}."
+	}
+
+	"No targets available"
+	{
+		"ru" "Пока нет игроков, на которых вы могли бы нацелиться"
+	}
 }
