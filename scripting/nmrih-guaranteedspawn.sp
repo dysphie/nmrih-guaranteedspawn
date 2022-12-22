@@ -10,7 +10,7 @@
 #include "nmrih-guaranteedspawn/admin-tools.sp"
 
 #define PREFIX "[Guaranteed Spawn] "
-#define PLUGIN_VERSION "1.0.17"
+#define PLUGIN_VERSION "1.0.18"
 #define PLUGIN_DESCRIPTION "Grants a spawn to late joiners"
 
 #define INET_ADDRSTRLEN 16
@@ -471,7 +471,7 @@ int GetObserverTarget(int client)
 public Action OnPlayerRunCmd(int client, int& buttons, int& impulse, float vel[3], float angles[3], int& weapon, int& subtype, int& cmdnum, int& tickcount, int& seed, int mouse[2])
 {
 	bool pressedUse = (buttons & IN_USE) && !(GetOldButtons(client) & IN_USE);
-	if (pressedUse & CouldSpawnThisRound(client))
+	if (pressedUse && CouldSpawnThisRound(client))
 	{
 		int target = GetBestSpawnTarget(client, true);
 		if (target != -1) {
