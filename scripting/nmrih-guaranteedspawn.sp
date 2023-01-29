@@ -10,7 +10,7 @@
 #include "nmrih-guaranteedspawn/admin-tools.sp"
 
 #define PREFIX "[Guaranteed Spawn] "
-#define PLUGIN_VERSION "1.0.18"
+#define PLUGIN_VERSION "1.0.19"
 #define PLUGIN_DESCRIPTION "Grants a spawn to late joiners"
 
 #define INET_ADDRSTRLEN 16
@@ -53,9 +53,11 @@ GlobalForward spawnFwdPost;
 
 int         spawningPlayer = -1;
 DynamicHook fnGetPlayerSpawnSpot;
-Handle      sdkSpawnPlayer;
 Handle      sdkStateTrans;
 
+float g_MapResetTime;
+
+ConVar cvLimit;
 ConVar cvNearby;
 ConVar cvStatic;
 ConVar cvCheckSteamID;
@@ -89,6 +91,9 @@ public void OnPluginStart()
 	ipSpawned    = new StringMap();
 	steamSpawned = new StringMap();
 	spawnpoints  = new ArrayList();
+
+	cvLimit = CreateConVar("sm_gspawn_time_limit", "0", 
+		"Maximum amount of time in seconds that a player can spawn into the current round");
 
 	cvStatic = CreateConVar("sm_gspawn_allow_checkpoint", "0", 
 		"(Experimental) Non-zero if players can late-spawn at static spawnpoints. Might lead to undersired spawns");
@@ -189,14 +194,6 @@ void DoGamedataStuff()
 	}
 
 	StartPrepSDKCall(SDKCall_Player);
-	PrepSDKCall_SetFromConf(gamedata, SDKConf_Virtual, "CNMRiH_Player::Spawn");
-	sdkSpawnPlayer = EndPrepSDKCall();
-	if (!sdkSpawnPlayer)
-	{
-		SetFailState("Failed to set up SDKCall for CNMRiH_Player::Spawn");
-	}
-
-	StartPrepSDKCall(SDKCall_Player);
 	PrepSDKCall_SetFromConf(gamedata, SDKConf_Signature, "CSDKPlayer::State_Transition");
 	PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
 	sdkStateTrans = EndPrepSDKCall();
@@ -233,6 +230,8 @@ public void OnMapEnd()
 	{
 		delete hintTimer[i];
 	}
+
+	g_MapResetTime = 0.0;
 }
 
 /**
@@ -312,6 +311,7 @@ int GetAvailableSpawnpoint(int client = -1)
 
 void Event_MapReset(Event event, const char[] name, bool silent)
 {
+	g_MapResetTime = GetGameTime();
 	ClearSpawnHistory();
 }
 
@@ -394,16 +394,38 @@ void UpdateHint(int client)
 	int target = GetBestSpawnTarget(client, false);
 	if (target != -1)
 	{
+		char timePrefix[32];
+
+		float timeLeft;
+		if (GetSpawnTimeLeft(timeLeft))
+		{
+			SecondsToHumanTime(timeLeft, timePrefix, sizeof(timePrefix));
+		}
+
 		if (!IsValidClient(target))
 		{
-			ShowRespawnHint(client, "%t", "Respawn At Checkpoint");
+			ShowRespawnHint(client, "%s%t", timePrefix, "Respawn At Checkpoint");
 		}
 		else
 		{
-			ShowRespawnHint(client, "%t", "Respawn At Teammate", target);
+			ShowRespawnHint(client, "%s%t", timePrefix, "Respawn At Teammate", target);
 		}
 	}
 }
+
+void SecondsToHumanTime(float value, char[] buffer, int maxlen)
+{
+	bool neg = value < 0.0;
+	if (neg) {
+		value = -value;
+	}
+
+	int secs    = RoundToFloor(value);
+	int minutes = secs / 60;
+	int seconds = secs % 60;
+	Format(buffer, maxlen, "[%s%02d:%02d] ",  neg ? "-" : "", minutes, seconds);
+}
+
 
 void ShowRespawnHint(int client, const char[] format, any...)
 {
@@ -565,7 +587,6 @@ bool ForceSpawn(int client, int target)
 	
 	spawningPlayer = client;
 	SDKCall(sdkStateTrans, client, STATE_ACTIVE);
-	SDKCall(sdkSpawnPlayer, client);
 	spawningPlayer = -1;
 
 	if (isTargetPlayer)
@@ -621,9 +642,34 @@ Action SetTransmit_HideToAll(int entity, int client)
 	return entity != client ? Plugin_Handled : Plugin_Continue;
 }
 
+bool GetSpawnTimeLeft(float& timeLeft)
+{
+	if (!g_MapResetTime) {
+		return false;
+	}
+	
+	float limit = cvLimit.FloatValue;
+	if (!limit) {
+		return false;
+	}
+
+	timeLeft = limit - GetGameTime() + g_MapResetTime;
+	if (timeLeft < 0.0) {
+		timeLeft = 0.0;
+	}
+
+	return true;
+}
+
 bool CouldSpawnThisRound(int client)
 {
 	if (indexSpawned[client])
+	{
+		return false;
+	}
+
+	float timeLeft;
+	if (GetSpawnTimeLeft(timeLeft) && timeLeft <= 0.0)
 	{
 		return false;
 	}
