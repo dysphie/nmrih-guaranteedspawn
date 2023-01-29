@@ -44,6 +44,9 @@ CVars are saved to `cfg/sourcemod/plugin.guaranteedspawn.txt`
 - `sm_gspawn_hide_seconds` [0.0 to 5.0] (Default: 1.2)
   - Hides spawned players for this many seconds, prevents spooking teammates by spawning right on their face
 
+- `sm_gspawn_time_limit` (Default: 0)
+  - Maximum amount of time, in seconds, that a player can spawn into the current round. 0 = No limit
+
 ## Admin Commands
 
 Commands can also be accessed via `sm_admin` -> `Player Commands`
