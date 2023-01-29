@@ -65,7 +65,7 @@ stock void SendInstructorHint(int client, const char[] hintName, const char[] hi
     event.SetString("hint_start_sound", hintStartSound);
     event.SetInt("hint_target_pos", hintTargetPos);
     event.FireToClient(client);
-    event.Close();
+    event.Cancel();
 }
 
 stock void RemoveInstructorHint(int client, const char[] hintName)
@@ -73,5 +73,5 @@ stock void RemoveInstructorHint(int client, const char[] hintName)
     Event event = CreateEvent("instructor_server_hint_stop", true);
     event.SetString("hint_name", hintName);
     event.FireToClient(client);
-    event.Close();	
+    event.Cancel();	
 }
