@@ -10,7 +10,7 @@
 #include "nmrih-guaranteedspawn/admin-tools.sp"
 
 #define PREFIX "[Guaranteed Spawn] "
-#define PLUGIN_VERSION "1.0.20"
+#define PLUGIN_VERSION "1.0.21"
 #define PLUGIN_DESCRIPTION "Grants a spawn to late joiners"
 
 #define INET_ADDRSTRLEN 16
@@ -680,6 +680,12 @@ bool CouldSpawnThisRound(int client)
 	} 
 	
 	if (NMRiH_IsPlayerAlive(client))
+	{
+		return false;
+	}
+
+	// Fix exploit where spawning during a cinematic gives you god mode due to a game bug
+	if (GetEntPropEnt(client, Prop_Data, "m_hViewEntity") != client)
 	{
 		return false;
 	}
