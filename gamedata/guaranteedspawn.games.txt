@@ -7,7 +7,7 @@
 			"CSDKPlayer::State_Transition"
 			{
 				"library"	"server"
-				"windows"	"\x55\x8B\xEC\x56\x8B\xF1\x8B\x8E\x24\x13\x00\x00\x85\xC9\x74"
+				"windows"	"\x55\x8B\xEC\x56\x8B\xF1\x8B\x8E\x10\x13\x00\x00\x85\xC9\x74"
 				"linux"		"@_ZN10CSDKPlayer16State_TransitionE14SDKPlayerState"
 			}
 		}
