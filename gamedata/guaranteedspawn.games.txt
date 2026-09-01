@@ -9,26 +9,30 @@
 				"library"	"server"
 				"windows"	"\x55\x8B\xEC\x56\x8B\xF1\x8B\x8E\xE4\x12\x00\x00\x85\xC9\x74"
 				"linux"		"@_ZN10CSDKPlayer16State_TransitionE14SDKPlayerState"
+				"linux64"	"@_ZN10CSDKPlayer16State_TransitionE14SDKPlayerState"
 			}
 		}
 		"Offsets"
 		{
 			"CNMRiH_PlayerSpawn::m_bEnabled"
 			{
-				"windows"	"893"
-				"linux"		"917"
+				"windows"	"901"
+				"linux"		"925"
+				"linux64"	"1201"
 			}
 
 			"CNMRiH_Player::Spawn"
 			{
 				"windows"	"24"
 				"linux"		"25"
+				"linux64"	"25"
 			}
 
 			"CGameRules::GetPlayerSpawnSpot"
 			{
-				"windows"	"76"
-				"linux"		"77"
+				"windows"	"75"
+				"linux"		"76"
+				"linux64"	"76"
 			}
 		}
 	}
